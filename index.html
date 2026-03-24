@@ -514,13 +514,13 @@ body{display:flex;flex-direction:column;height:100vh;font-family:'Noto Sans KR',
 
     <div id="login-step-3" style="display:none; width:100%; text-align:center;">
       <div style="font-size:44px; margin-bottom:16px;">📧</div>
-      <div style="font-size:16px; font-weight:700; color:#1a1a1a; margin-bottom:10px;">가입이 완료되었습니다!</div>
+      <div style="font-size:16px; font-weight:700; color:#1a1a1a; margin-bottom:10px;">가입 신청이 완료되었습니다!</div>
       <div style="font-size:12px; color:#666; line-height:1.9; margin-bottom:24px; background:#f8f8f8; border-radius:8px; padding:14px;">
-        입력하신 이메일로 인증 메일을 발송했습니다.<br>
-        📬 메일함을 확인하고 <strong>인증 링크</strong>를 클릭해주세요.<br>
-        <span style="color:#aaa; font-size:11px;">(스팸함도 함께 확인해보세요)</span>
+        관리자 승인 후 로그인이 가능합니다.<br>
+        📬 승인이 완료되면 별도로 안내해 드립니다.<br>
+        <span style="color:#aaa; font-size:11px;">(승인 전에는 로그인이 제한됩니다)</span>
       </div>
-      <button class="login-btn" onclick="backToLoginFromVerify()">✔ 인증 완료 후 로그인</button>
+      <button class="login-btn" onclick="backToLoginFromVerify()">← 로그인 화면으로</button>
     </div>
   </div>
 </div>
@@ -686,26 +686,39 @@ body{display:flex;flex-direction:column;height:100vh;font-family:'Noto Sans KR',
           } else {
             setError('가입 처리 중 오류: ' + (error.message || '알 수 없는 오류'));
           }
-          if(error.message?.includes('already registered')) setAuthMode('login');
-        } else {
-          if(data?.session){
-            await onAuthSuccess();
-          } else {
-            // 이메일 인증 안내 화면(step-3)으로 전환
-            document.getElementById('login-step-2').style.display = 'none';
-            document.getElementById('login-step-3').style.display = 'block';
-            document.getElementById('login-pw').value = '';
-            document.getElementById('login-pw-confirm').value = '';
-          }
+        } else if(data?.user){
+          // 승인 대기 테이블에 등록
+          try {
+            await sb.from('user_approvals').insert({ user_id: data.user.id, email: email });
+          } catch(e){}
+          // 가입 후 바로 로그아웃 (승인 전 접근 차단)
+          try { await sb.auth.signOut(); } catch(e){}
+          // 안내 화면으로 전환
+          document.getElementById('login-step-2').style.display = 'none';
+          document.getElementById('login-step-3').style.display = 'block';
+          document.getElementById('login-pw').value = '';
+          const pc = document.getElementById('login-pw-confirm');
+          if(pc) pc.value = '';
         }
       } else {
-        const { error } = await sb.auth.signInWithPassword({ email, password: pw });
+        const { data: signInData, error } = await sb.auth.signInWithPassword({ email, password: pw });
         if(error){
           setError('이메일 또는 비밀번호가 올바르지 않습니다.');
           document.getElementById('login-pw').value = '';
           document.getElementById('login-pw').focus();
         } else {
-          await onAuthSuccess();
+          // ── 승인 여부 확인 ──
+          const { data: approval } = await sb.from('user_approvals')
+            .select('approved')
+            .eq('user_id', signInData.user.id)
+            .single();
+          if(!approval || !approval.approved){
+            await sb.auth.signOut();
+            setError('관리자 승인 대기 중입니다. 승인 후 로그인 가능합니다.');
+            document.getElementById('login-pw').value = '';
+          } else {
+            await onAuthSuccess();
+          }
         }
       }
     } catch(e){
