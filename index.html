@@ -427,6 +427,28 @@ body{display:flex;flex-direction:column;height:100vh;font-family:'Noto Sans KR',
   font-family:'Noto Sans KR',sans-serif;
 }
 #login-overlay.hidden{display:none;}
+
+/* ── ADMIN OVERLAY ── */
+#admin-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.85);display:flex;align-items:center;justify-content:center;z-index:9999;}
+#admin-overlay.hidden{display:none;}
+.admin-box{background:#fff;border-radius:16px;padding:32px;width:100%;max-width:540px;max-height:80vh;display:flex;flex-direction:column;box-shadow:0 24px 80px rgba(0,0,0,0.5);}
+.admin-title{font-size:16px;font-weight:700;letter-spacing:2px;color:#1a1a1a;margin-bottom:4px;}
+.admin-sub{font-size:11px;color:#c8a96e;letter-spacing:1px;margin-bottom:20px;}
+.admin-list{flex:1;overflow-y:auto;border:1px solid #e0e0e0;border-radius:8px;}
+.admin-row{display:flex;align-items:center;padding:12px 14px;border-bottom:1px solid #f0f0f0;gap:10px;}
+.admin-row:last-child{border-bottom:none;}
+.admin-row-email{flex:1;font-size:12px;color:#333;}
+.admin-row-date{font-size:10px;color:#aaa;white-space:nowrap;}
+.admin-badge{font-size:10px;font-weight:700;padding:3px 8px;border-radius:20px;white-space:nowrap;}
+.admin-badge.pending{background:#fff3cd;color:#856404;}
+.admin-badge.approved{background:#d1e7dd;color:#0a3622;}
+.admin-approve-btn{padding:5px 12px;border:none;border-radius:6px;cursor:pointer;font-size:11px;font-weight:700;background:#1a1a1a;color:#fff;transition:background .15s;}
+.admin-approve-btn:hover{background:#c8a96e;}
+.admin-approve-btn.revoke{background:#f5f5f5;color:#666;}
+.admin-approve-btn.revoke:hover{background:#e00;color:#fff;}
+.admin-empty{text-align:center;padding:32px;color:#aaa;font-size:12px;}
+.admin-close-btn{margin-top:16px;width:100%;padding:11px;border:1px solid #ddd;border-radius:8px;background:#fff;color:#666;font-size:13px;font-weight:600;cursor:pointer;}
+.admin-close-btn:hover{background:#f5f5f5;}
 .login-box{
   background:#fff;border-radius:16px;padding:48px 40px 40px;
   width:100%;max-width:400px;box-shadow:0 24px 80px rgba(0,0,0,0.5);
@@ -525,9 +547,22 @@ body{display:flex;flex-direction:column;height:100vh;font-family:'Noto Sans KR',
   </div>
 </div>
 
+<!-- ── ADMIN OVERLAY ── -->
+<div id="admin-overlay" class="hidden">
+  <div class="admin-box">
+    <div class="admin-title">👤 가입 승인 관리</div>
+    <div class="admin-sub">HARU'E PICK · 관리자 전용</div>
+    <div class="admin-list" id="admin-user-list">
+      <div class="admin-empty">불러오는 중...</div>
+    </div>
+    <button class="admin-close-btn" onclick="closeAdminPanel()">✕ 닫기</button>
+  </div>
+</div>
+
 <script>
 (function(){
   const SUPABASE_URL = 'https://vxwtwawvncwfxgwxpfkq.supabase.co';
+  const ADMIN_EMAIL = 'haruetech@gmail.com'; // ← 관리자 이메일
   const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZ4d3R3YXd2bmN3Znhnd3hwZmtxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM3NTQ2MTAsImV4cCI6MjA4OTMzMDYxMH0.1c3UKVc85iuJEOBQMQH7y3LdU-cQdRclCG2ZXofz8qw';
 
   let authMode = 'login';
@@ -629,6 +664,17 @@ body{display:flex;flex-direction:column;height:100vh;font-family:'Noto Sans KR',
   async function onAuthSuccess(){
     document.getElementById('login-overlay').classList.add('hidden');
     setError('');
+    // 관리자 이메일이면 승인 관리 패널 오픈
+    try {
+      const sb = getAuthClient();
+      const { data:{ user } } = await sb.auth.getUser();
+      if(user && user.email === ADMIN_EMAIL){
+        const adminBtn = document.getElementById('admin-panel-btn');
+        if(adminBtn) adminBtn.style.display='inline-block';
+        openAdminPanel();
+        return;
+      }
+    } catch(e){}
     setTimeout(()=>{ try{ startNewProduct(true); }catch(e){} }, 50);
   }
 
@@ -638,6 +684,10 @@ body{display:flex;flex-direction:column;height:100vh;font-family:'Noto Sans KR',
       const { data: { session } } = await sb.auth.getSession();
       if(session){
         document.getElementById('login-overlay').classList.add('hidden');
+        if(session.user.email === ADMIN_EMAIL){
+          openAdminPanel();
+          return;
+        }
         setTimeout(()=>{ try{ startNewProduct(true); }catch(e){} }, 50);
       }
     } catch(e){}
@@ -730,6 +780,65 @@ body{display:flex;flex-direction:column;height:100vh;font-family:'Noto Sans KR',
 
 
 
+  // ── 관리자 패널 ──────────────────────────────────────────
+  window.openAdminPanel = async function(){
+    document.getElementById('admin-overlay').classList.remove('hidden');
+    await loadAdminUsers();
+  };
+
+  window.closeAdminPanel = function(){
+    document.getElementById('admin-overlay').classList.add('hidden');
+  };
+
+  async function loadAdminUsers(){
+    const list = document.getElementById('admin-user-list');
+    list.innerHTML = '<div class="admin-empty">불러오는 중...</div>';
+    try {
+      const sb = getAuthClient();
+      const { data, error } = await sb.from('user_approvals')
+        .select('*').order('created_at', { ascending: false });
+      if(error || !data || data.length === 0){
+        list.innerHTML = '<div class="admin-empty">가입 신청자가 없습니다.</div>';
+        return;
+      }
+      list.innerHTML = '';
+      data.forEach(row => {
+        const div = document.createElement('div');
+        div.className = 'admin-row';
+        const date = new Date(row.created_at).toLocaleDateString('ko-KR');
+        div.innerHTML = `
+          <div class="admin-row-email">${row.email}</div>
+          <div class="admin-row-date">${date}</div>
+          <span class="admin-badge ${row.approved ? 'approved' : 'pending'}">${row.approved ? '승인됨' : '대기중'}</span>
+          <button class="admin-approve-btn ${row.approved ? 'revoke' : ''}"
+            onclick="toggleApproval('${row.user_id}', ${row.approved}, this)">
+            ${row.approved ? '취소' : '승인'}
+          </button>`;
+        list.appendChild(div);
+      });
+    } catch(e){
+      list.innerHTML = '<div class="admin-empty">불러오기 실패: ' + e.message + '</div>';
+    }
+  }
+
+  window.toggleApproval = async function(userId, currentApproved, btn){
+    btn.disabled = true;
+    btn.textContent = '처리중...';
+    try {
+      const sb = getAuthClient();
+      const newVal = !currentApproved;
+      const { error } = await sb.from('user_approvals')
+        .update({ approved: newVal }).eq('user_id', userId);
+      if(error) throw error;
+      await loadAdminUsers(); // 새로고침
+    } catch(e){
+      alert('오류: ' + e.message);
+      btn.disabled = false;
+      btn.textContent = currentApproved ? '취소' : '승인';
+    }
+  };
+  // ─────────────────────────────────────────────────────────
+
   window.doLogout = async function(){
     try {
       const sb = getAuthClient();
@@ -760,6 +869,7 @@ body{display:flex;flex-direction:column;height:100vh;font-family:'Noto Sans KR',
 <div class="topbar-actions">
 <div class="topbar-group" style="padding-left:0;border-left:none;">
 <button class="topbar-btn" onclick="doLogout()" style="background:#555;color:#fff;" title="로그아웃">🔓 로그아웃</button>
+<button class="topbar-btn" id="admin-panel-btn" onclick="openAdminPanel()" style="display:none;background:#c8a96e;color:#000;font-weight:700;" title="가입 승인 관리">👤 승인관리</button>
 <button class="topbar-btn reset-btn" onclick="startNewProduct()" title="현재 상품 데이터 초기화 후 새 작업 시작">🆕 신규 작성</button>
 
 <input id="width-slider" max="1200" min="360" oninput="setPageWidth(this.value)" type="range" value="1000"/>
