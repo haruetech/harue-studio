@@ -609,8 +609,6 @@ body{display:flex;flex-direction:column;height:100vh;font-family:'Noto Sans KR',
   };
 
   window.backToLoginEmail = function(){
-    document.getElementById('login-step-2').style.display = 'none';
-    document.getElementById('login-step-1').style.display = 'block';
     document.getElementById('login-pw').value = '';
     const confirm = document.getElementById('login-pw-confirm');
     if(confirm) confirm.value = '';
@@ -624,6 +622,7 @@ body{display:flex;flex-direction:column;height:100vh;font-family:'Noto Sans KR',
     setAuthMode('login');
     setError('');
     setInfo('');
+    document.getElementById('login-pw').value = '';
     setTimeout(()=>{ document.getElementById('login-pw').focus(); }, 50);
   };
 
