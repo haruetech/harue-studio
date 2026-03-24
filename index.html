@@ -493,8 +493,16 @@ body{display:flex;flex-direction:column;height:100vh;font-family:'Noto Sans KR',
       </div>
       <div class="login-field">
         <label>이메일</label>
-        <input type="email" id="login-id" placeholder="이메일 입력" autocomplete="email"
-          onkeydown="if(event.key==='Enter') document.getElementById('login-pw').focus()"/>
+        <div style="position:relative;">
+          <input type="email" id="login-id" placeholder="이메일 입력" autocomplete="off"
+            onkeydown="if(event.key==='Enter') document.getElementById('login-pw').focus()"
+            oninput="onEmailInput(this.value)"
+            onfocus="onEmailInput(this.value)"
+            onblur="setTimeout(()=>hideEmailSuggestions(),150)"
+            style="width:100%;padding:7px 10px;border:1px solid #e0e0e0;border-radius:4px;font-size:12px;font-family:'Noto Sans KR',sans-serif;background:#fafafa;"/>
+          <div id="email-suggestions" style="display:none;position:absolute;top:100%;left:0;right:0;background:#fff;border:1px solid #e0e0e0;border-radius:0 0 6px 6px;z-index:999;box-shadow:0 4px 12px rgba(0,0,0,0.1);max-height:180px;overflow-y:auto;"></div>
+        </div>
+        <div id="email-domain-chips" style="display:flex;flex-wrap:wrap;gap:5px;margin-top:7px;"></div>
         <input type="email" id="login-id-confirm" style="display:none;"/>
       </div>
       <div class="login-field">
@@ -743,6 +751,77 @@ body{display:flex;flex-direction:column;height:100vh;font-family:'Noto Sans KR',
       setLoading(false);
     }
   };
+
+  // ── 이메일 도메인 추천 ──────────────────────────────────
+  const EMAIL_DOMAINS = [
+    'gmail.com', 'naver.com', 'kakao.com', 'daum.net',
+    'hanmail.net', 'nate.com', 'icloud.com', 'outlook.com', 'hotmail.com', 'yahoo.com'
+  ];
+
+  function renderDomainChips(){
+    const wrap = document.getElementById('email-domain-chips');
+    if(!wrap) return;
+    wrap.innerHTML = '';
+    EMAIL_DOMAINS.forEach(domain => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.textContent = '@' + domain;
+      btn.style.cssText = 'padding:3px 9px;border:1px solid #e0e0e0;border-radius:20px;background:#f9f9f9;color:#555;font-size:11px;cursor:pointer;font-family:inherit;transition:all .15s;white-space:nowrap;';
+      btn.onmouseenter = ()=>{ btn.style.background='#1a1a1a'; btn.style.color='#fff'; btn.style.borderColor='#1a1a1a'; };
+      btn.onmouseleave = ()=>{ btn.style.background='#f9f9f9'; btn.style.color='#555'; btn.style.borderColor='#e0e0e0'; };
+      btn.onclick = ()=>{
+        const inp = document.getElementById('login-id');
+        const cur = inp.value;
+        const atIdx = cur.indexOf('@');
+        inp.value = (atIdx >= 0 ? cur.substring(0, atIdx) : cur) + '@' + domain;
+        hideEmailSuggestions();
+        document.getElementById('login-pw').focus();
+      };
+      wrap.appendChild(btn);
+    });
+  }
+
+  function onEmailInput(val){
+    const sugg = document.getElementById('email-suggestions');
+    if(!sugg) return;
+    const atIdx = val.indexOf('@');
+    if(atIdx < 0 || atIdx === val.length - 1){
+      // @ 없거나 @ 바로 뒤: 도메인 드롭다운 표시
+      const typed = atIdx >= 0 ? val.substring(atIdx + 1) : '';
+      const filtered = EMAIL_DOMAINS.filter(d => typed === '' || d.startsWith(typed));
+      if(filtered.length > 0 && atIdx >= 0){
+        sugg.innerHTML = '';
+        filtered.forEach(domain => {
+          const item = document.createElement('div');
+          item.textContent = val.substring(0, atIdx + 1) + domain;
+          item.style.cssText = 'padding:9px 12px;cursor:pointer;font-size:12px;color:#333;border-bottom:1px solid #f0f0f0;transition:background .1s;';
+          item.onmouseenter = ()=>{ item.style.background='#f5f5f5'; };
+          item.onmouseleave = ()=>{ item.style.background=''; };
+          item.onmousedown = ()=>{
+            document.getElementById('login-id').value = val.substring(0, atIdx + 1) + domain;
+            hideEmailSuggestions();
+            setTimeout(()=>document.getElementById('login-pw').focus(), 50);
+          };
+          sugg.appendChild(item);
+        });
+        sugg.style.display = 'block';
+      } else {
+        sugg.style.display = 'none';
+      }
+    } else {
+      sugg.style.display = 'none';
+    }
+  }
+
+  function hideEmailSuggestions(){
+    const sugg = document.getElementById('email-suggestions');
+    if(sugg) sugg.style.display = 'none';
+  }
+
+  // 칩 초기 렌더링 (로그인 박스 표시 시)
+  document.addEventListener('DOMContentLoaded', renderDomainChips);
+  setTimeout(renderDomainChips, 300);
+  // ─────────────────────────────────────────────────────────
 
   window.doLogout = async function(){
     try {
