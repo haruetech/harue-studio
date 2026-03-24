@@ -473,6 +473,7 @@ body{display:flex;flex-direction:column;height:100vh;font-family:'Noto Sans KR',
 
 </style>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
 </head>
 <body>
 
@@ -515,7 +516,10 @@ body{display:flex;flex-direction:column;height:100vh;font-family:'Noto Sans KR',
       </div>
       <div class="login-info" id="login-info"></div>
       <div class="login-error" id="login-error">아이디 또는 비밀번호가 올바르지 않습니다.</div>
-      <button class="login-btn" id="login-submit-btn" onclick="submitAuth()">로그인</button>
+      <div id="turnstile-wrap" style="margin-bottom:10px; display:none;">
+  <div class="cf-turnstile" data-sitekey="0x4AAAAAACvSSZylucx-fVgz" data-callback="onTurnstileSuccess" data-theme="light"></div>
+</div>
+<button class="login-btn" id="login-submit-btn" onclick="submitAuth()">로그인</button>
       <button type="button" onclick="backToLoginEmail()" style="margin-top:10px;width:100%;padding:11px;border:1px solid #ddd;border-radius:8px;background:#fff;color:#666;font-size:13px;font-weight:600;cursor:pointer;">이메일 다시 입력</button>
     </div>
 
@@ -529,38 +533,22 @@ body{display:flex;flex-direction:column;height:100vh;font-family:'Noto Sans KR',
       </div>
       <button class="login-btn" onclick="backToLoginFromVerify()">✔ 인증 완료 후 로그인</button>
     </div>
-
-    <!-- 승인 대기 화면 -->
-    <div id="login-step-pending" style="display:none; width:100%; text-align:center;">
-      <div style="font-size:48px; margin-bottom:16px;">⏳</div>
-      <div style="font-size:16px; font-weight:700; color:#1a1a1a; margin-bottom:10px;">승인 대기 중입니다</div>
-      <div style="font-size:12px; color:#666; line-height:1.9; margin-bottom:24px; background:#f8f8f8; border-radius:8px; padding:14px;">
-        관리자 승인 후 사용하실 수 있습니다.<br>
-        승인이 완료되면 다시 로그인해 주세요.<br>
-        <span style="color:#aaa; font-size:11px;">(문의: 관리자에게 연락해주세요)</span>
-      </div>
-      <button class="login-btn" onclick="doLogout()" style="background:#888;">로그아웃</button>
-    </div>
   </div>
 </div>
 
 <script>
 (function(){
   const SUPABASE_URL = 'https://vxwtwawvncwfxgwxpfkq.supabase.co';
-  const SUPABASE_ANON = 'sb_publishable_PiTS0rwi04s2IUZvc_9zmA_pY68PPu_';
+  const SUPABASE_PUBLISHABLE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.sb_publishable_PiTS0rwi04s2IUZvc_9zmA_pY68PPu_";
   let authMode = 'login';
 
   let _authClient = null;
   function getAuthClient(){
     if(!_authClient){
-      if(!window.supabase || !window.supabase.createClient) throw new Error('Supabase 라이브러리 로딩 실패.');
       _authClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
     }
     return _authClient;
   }
-
-
-
 
   function setError(msg=''){
     const errEl = document.getElementById('login-error');
@@ -599,6 +587,7 @@ body{display:flex;flex-direction:column;height:100vh;font-family:'Noto Sans KR',
       loginBtn.style.background = '#fff'; loginBtn.style.color = '#666';
       signupBtn.style.background = '#1a1a1a'; signupBtn.style.color = '#fff';
       confirmWrap.style.display = 'block';
+      document.getElementById('turnstile-wrap').style.display = 'block';
       pwInput.placeholder = '새 비밀번호 입력';
       pwInput.autocomplete = 'new-password';
       pwLabel.textContent = '새 비밀번호';
@@ -607,6 +596,8 @@ body{display:flex;flex-direction:column;height:100vh;font-family:'Noto Sans KR',
       loginBtn.style.background = '#1a1a1a'; loginBtn.style.color = '#fff';
       signupBtn.style.background = '#fff'; signupBtn.style.color = '#666';
       confirmWrap.style.display = 'none';
+      document.getElementById('turnstile-wrap').style.display = 'none';
+      turnstileToken = '';
       pwInput.placeholder = '비밀번호 입력';
       pwInput.autocomplete = 'current-password';
       pwLabel.textContent = '비밀번호';
@@ -648,28 +639,9 @@ body{display:flex;flex-direction:column;height:100vh;font-family:'Noto Sans KR',
   };
 
   async function onAuthSuccess(){
-    try {
-      const sb = getAuthClient();
-      const { data: { user } } = await sb.auth.getUser();
-      if(user){
-        const { data: profile } = await sb.from('profiles').select('approved').eq('id', user.id).single();
-        if(profile && profile.approved === true){
-          // 승인된 사용자
-          document.getElementById('login-overlay').classList.add('hidden');
-          setError('');
-          setTimeout(()=>{ try{ startNewProduct(true); }catch(e){} }, 50);
-        } else {
-          // 미승인 사용자 → 승인 대기 화면
-          document.getElementById('login-step-2').style.display = 'none';
-          document.getElementById('login-step-pending').style.display = 'block';
-        }
-      }
-    } catch(e){
-      // 프로필 조회 실패 시 일단 진입 허용
-      document.getElementById('login-overlay').classList.add('hidden');
-      setError('');
-      setTimeout(()=>{ try{ startNewProduct(true); }catch(e){} }, 50);
-    }
+    document.getElementById('login-overlay').classList.add('hidden');
+    setError('');
+    setTimeout(()=>{ try{ startNewProduct(true); }catch(e){} }, 50);
   }
 
   async function checkSession(){
@@ -677,7 +649,8 @@ body{display:flex;flex-direction:column;height:100vh;font-family:'Noto Sans KR',
       const sb = getAuthClient();
       const { data: { session } } = await sb.auth.getSession();
       if(session){
-        await onAuthSuccess();
+        document.getElementById('login-overlay').classList.add('hidden');
+        setTimeout(()=>{ try{ startNewProduct(true); }catch(e){} }, 50);
       }
     } catch(e){}
   }
@@ -713,7 +686,7 @@ body{display:flex;flex-direction:column;height:100vh;font-family:'Noto Sans KR',
     try {
       const sb = getAuthClient();
       if(authMode === 'signup'){
-        const { data, error } = await sb.auth.signUp({ email, password: pw });
+        const { data, error } = await sb.auth.signUp({ email, password: pw, options: { captchaToken: turnstileToken } });
         if(error){
           setError(error.message?.includes('already registered') ? '이미 가입된 이메일입니다. 로그인으로 진행해주세요.' : '가입 처리 중 오류가 발생했습니다.');
           if(error.message?.includes('already registered')) setAuthMode('login');
