@@ -500,7 +500,7 @@ body{display:flex;flex-direction:column;height:100vh;font-family:'Noto Sans KR',
             onfocus="onEmailFocus(this.value)"
             onblur="setTimeout(()=>hideEmailSuggestions(),180)"
             style="width:100%;padding:7px 10px;border:1px solid #e0e0e0;border-radius:4px;font-size:12px;font-family:'Noto Sans KR',sans-serif;background:#fafafa;"/>
-          <div id="email-suggestions" style="display:none;position:absolute;top:0;left:calc(100% + 8px);width:160px;background:#fff;border:1px solid #e0e0e0;border-radius:8px;z-index:999;box-shadow:0 4px 16px rgba(0,0,0,0.13);overflow:hidden;"></div>
+          <div id="email-suggestions" style="display:none;position:absolute;top:calc(100% + 4px);left:0;right:0;background:#fff;border:1px solid #e0e0e0;border-radius:8px;z-index:9999;box-shadow:0 4px 16px rgba(0,0,0,0.13);overflow:hidden;"></div>
         </div>
         <input type="email" id="login-id-confirm" style="display:none;"/>
       </div>
