@@ -2202,9 +2202,10 @@ function openInitialProductInfoScreen(){
   function doScroll(){
     try{
       const sidebarBody = document.querySelector('.sidebar-body');
-      const header = body ? body.previousElementSibling : null;
-      if(sidebarBody && header){
-        sidebarBody.scrollTop = header.offsetTop - 8;
+      // acc-hd(헤더)를 직접 찾아서 맨 위로 스크롤
+      const accHd = document.querySelector('.acc-hd[onclick*="acc-c-info"]');
+      if(sidebarBody && accHd){
+        sidebarBody.scrollTop = accHd.offsetTop;
       }
       const previewWrap = document.querySelector('.preview-wrap');
       const productInfoSection = document.getElementById('pd-info-section');
@@ -2215,8 +2216,8 @@ function openInitialProductInfoScreen(){
     }catch(e){}
   }
   setTimeout(doScroll, 80);
-  setTimeout(doScroll, 300);
-  setTimeout(doScroll, 700);
+  setTimeout(doScroll, 350);
+  setTimeout(doScroll, 750);
 }
 
 // ============================================================
