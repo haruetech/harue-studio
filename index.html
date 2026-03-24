@@ -596,7 +596,7 @@ body{display:flex;flex-direction:column;height:100vh;font-family:'Noto Sans KR',
       loginBtn.style.background = '#1a1a1a'; loginBtn.style.color = '#fff';
       signupBtn.style.background = '#fff'; signupBtn.style.color = '#666';
       confirmWrap.style.display = 'none';
-      document.getElementById('turnstile-wrap').style.display = 'none';
+      document.getElementById('turnstile-wrap').style.display = 'block';
       turnstileToken = '';
       pwInput.placeholder = '비밀번호 입력';
       pwInput.autocomplete = 'current-password';
@@ -615,6 +615,7 @@ body{display:flex;flex-direction:column;height:100vh;font-family:'Noto Sans KR',
     document.getElementById('login-id-confirm').value = email;
     document.getElementById('login-step-1').style.display = 'none';
     document.getElementById('login-step-2').style.display = 'block';
+    document.getElementById('turnstile-wrap').style.display = 'block';
     setAuthMode('login');
     setTimeout(()=>{ document.getElementById('login-pw').focus(); }, 50);
   };
@@ -702,7 +703,7 @@ body{display:flex;flex-direction:column;height:100vh;font-family:'Noto Sans KR',
           }
         }
       } else {
-        const { error } = await sb.auth.signInWithPassword({ email, password: pw });
+        const { error } = await sb.auth.signInWithPassword({ email, password: pw, options: { captchaToken: turnstileToken } });
         if(error){
           setError('이메일 또는 비밀번호가 올바르지 않습니다.');
           document.getElementById('login-pw').value = '';
