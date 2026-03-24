@@ -517,7 +517,7 @@ body{display:flex;flex-direction:column;height:100vh;font-family:'Noto Sans KR',
       <div class="login-info" id="login-info"></div>
       <div class="login-error" id="login-error">아이디 또는 비밀번호가 올바르지 않습니다.</div>
       <div id="turnstile-wrap" style="margin-bottom:10px; display:none;">
-  <div class="cf-turnstile" data-sitekey="0x4AAAAAACvSSZylucx-fVgz" data-callback="onTurnstileSuccess" data-theme="light"></div>
+  <div id="turnstile-widget"></div>
 </div>
 <button class="login-btn" id="login-submit-btn" onclick="submitAuth()">로그인</button>
       <button type="button" onclick="backToLoginEmail()" style="margin-top:10px;width:100%;padding:11px;border:1px solid #ddd;border-radius:8px;background:#fff;color:#666;font-size:13px;font-weight:600;cursor:pointer;">이메일 다시 입력</button>
@@ -541,7 +541,25 @@ body{display:flex;flex-direction:column;height:100vh;font-family:'Noto Sans KR',
   const SUPABASE_URL = 'https://vxwtwawvncwfxgwxpfkq.supabase.co';
   const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZ4d3R3YXd2bmN3Znhnd3hwZmtxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM3NTQ2MTAsImV4cCI6MjA4OTMzMDYxMH0.1c3UKVc85iuJEOBQMQH7y3LdU-cQdRclCG2ZXofz8qw';
   let turnstileToken = '';
+  let turnstileWidgetId = null;
   window.onTurnstileSuccess = function(token){ turnstileToken = token; };
+
+  function renderTurnstile(){
+    const container = document.getElementById('turnstile-widget');
+    if(!container) return;
+    if(turnstileWidgetId !== null && window.turnstile){
+      try{ window.turnstile.remove(turnstileWidgetId); }catch(e){}
+      turnstileWidgetId = null;
+    }
+    turnstileToken = '';
+    if(window.turnstile && window.turnstile.render){
+      turnstileWidgetId = window.turnstile.render(container, {
+        sitekey: '0x4AAAAAACvSSZylucx-fVgz',
+        theme: 'light',
+        callback: function(token){ turnstileToken = token; }
+      });
+    }
+  }
   let authMode = 'login';
 
   let _authClient = null;
@@ -619,6 +637,7 @@ body{display:flex;flex-direction:column;height:100vh;font-family:'Noto Sans KR',
     document.getElementById('login-step-1').style.display = 'none';
     document.getElementById('login-step-2').style.display = 'block';
     document.getElementById('turnstile-wrap').style.display = 'block';
+    renderTurnstile();
     setAuthMode('login');
     setTimeout(()=>{ document.getElementById('login-pw').focus(); }, 50);
   };
@@ -636,6 +655,8 @@ body{display:flex;flex-direction:column;height:100vh;font-family:'Noto Sans KR',
   window.backToLoginFromVerify = function(){
     document.getElementById('login-step-3').style.display = 'none';
     document.getElementById('login-step-2').style.display = 'block';
+    document.getElementById('turnstile-wrap').style.display = 'block';
+    renderTurnstile();
     setAuthMode('login');
     setError('');
     setInfo('');
