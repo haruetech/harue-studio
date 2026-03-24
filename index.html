@@ -757,17 +757,22 @@ body{display:flex;flex-direction:column;height:100vh;font-family:'Noto Sans KR',
           document.getElementById('login-pw').value = '';
           document.getElementById('login-pw').focus();
         } else {
-          // ── 승인 여부 확인 ──
-          const { data: approval } = await sb.from('user_approvals')
-            .select('approved')
-            .eq('user_id', signInData.user.id)
-            .single();
-          if(!approval || !approval.approved){
-            await sb.auth.signOut();
-            setError('관리자 승인 대기 중입니다. 승인 후 로그인 가능합니다.');
-            document.getElementById('login-pw').value = '';
-          } else {
+          // ── 관리자는 승인 체크 없이 바로 입장 ──
+          if(signInData.user.email === ADMIN_EMAIL){
             await onAuthSuccess();
+          } else {
+            // ── 일반 유저 승인 여부 확인 ──
+            const { data: approval } = await sb.from('user_approvals')
+              .select('approved')
+              .eq('user_id', signInData.user.id)
+              .single();
+            if(!approval || !approval.approved){
+              await sb.auth.signOut();
+              setError('관리자 승인 대기 중입니다. 승인 후 로그인 가능합니다.');
+              document.getElementById('login-pw').value = '';
+            } else {
+              await onAuthSuccess();
+            }
           }
         }
       }
