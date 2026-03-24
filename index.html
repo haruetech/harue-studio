@@ -493,15 +493,8 @@ body{display:flex;flex-direction:column;height:100vh;font-family:'Noto Sans KR',
       </div>
       <div class="login-field">
         <label>이메일</label>
-        <div style="position:relative;">
-          <input type="email" id="login-id" placeholder="이메일 입력" autocomplete="off"
-            onkeydown="onEmailKeydown(event)"
-            oninput="onEmailInput(this.value)"
-            onfocus="onEmailFocus(this.value)"
-            onblur="setTimeout(()=>hideEmailSuggestions(),180)"
-            style="width:100%;padding:7px 10px;border:1px solid #e0e0e0;border-radius:4px;font-size:12px;font-family:'Noto Sans KR',sans-serif;background:#fafafa;"/>
-          <div id="email-suggestions" style="display:none;position:absolute;top:calc(100% + 4px);left:0;right:0;background:#fff;border:1px solid #e0e0e0;border-radius:8px;z-index:9999;box-shadow:0 4px 16px rgba(0,0,0,0.13);overflow:hidden;"></div>
-        </div>
+        <input type="email" id="login-id" placeholder="이메일 입력" autocomplete="email"
+          onkeydown="if(event.key==='Enter') document.getElementById('login-pw').focus()"/>
         <input type="email" id="login-id-confirm" style="display:none;"/>
       </div>
       <div class="login-field">
@@ -679,6 +672,8 @@ body{display:flex;flex-direction:column;height:100vh;font-family:'Noto Sans KR',
     } catch(e){}
   }
   checkSession();
+  // 캡차 위젯 초기 렌더링
+  setTimeout(renderTurnstile, 500);
 
   window.submitAuth = async function(){
     const email = (document.getElementById('login-id-confirm').value || document.getElementById('login-id').value || '').trim();
@@ -751,97 +746,7 @@ body{display:flex;flex-direction:column;height:100vh;font-family:'Noto Sans KR',
     }
   };
 
-  // ── 이메일 도메인 추천 ──────────────────────────────────
-  const EMAIL_DOMAINS = [
-    'gmail.com', 'naver.com', 'kakao.com', 'daum.net',
-    'hanmail.net', 'nate.com', 'icloud.com', 'outlook.com', 'hotmail.com', 'yahoo.com'
-  ];
-  let emailSuggIdx = -1;
 
-  function buildSuggestions(val){
-    const sugg = document.getElementById('email-suggestions');
-    if(!sugg) return;
-    const atIdx = val.indexOf('@');
-    const typed = atIdx >= 0 ? val.substring(atIdx + 1).toLowerCase() : '';
-    const prefix = atIdx >= 0 ? val.substring(0, atIdx + 1) : val;
-    const filtered = atIdx >= 0
-      ? EMAIL_DOMAINS.filter(d => typed === '' || d.startsWith(typed))
-      : EMAIL_DOMAINS;
-
-    if(filtered.length === 0){ sugg.style.display='none'; return; }
-
-    sugg.innerHTML = '';
-    emailSuggIdx = -1;
-    filtered.forEach((domain, i) => {
-      const item = document.createElement('div');
-      item.dataset.domain = domain;
-      item.style.cssText = 'padding:9px 13px;cursor:pointer;font-size:12px;color:#333;border-bottom:1px solid #f5f5f5;transition:background .1s;display:flex;align-items:center;gap:5px;';
-      const dimSpan = document.createElement('span');
-      dimSpan.style.cssText = 'color:#bbb;font-size:11px;';
-      dimSpan.textContent = atIdx >= 0 ? prefix : '';
-      const boldSpan = document.createElement('span');
-      boldSpan.style.cssText = 'font-weight:700;color:#1a1a1a;';
-      boldSpan.textContent = domain;
-      item.appendChild(dimSpan);
-      item.appendChild(boldSpan);
-      item.onmouseenter = ()=>{ item.style.background='#f5f5f5'; emailSuggIdx=i; };
-      item.onmouseleave = ()=>{ item.style.background=''; };
-      item.onmousedown = (e)=>{
-        e.preventDefault();
-        selectDomain(domain, atIdx >= 0 ? prefix : val + '@');
-      };
-      sugg.appendChild(item);
-    });
-    sugg.style.display = 'block';
-  }
-
-  function selectDomain(domain, prefix){
-    const inp = document.getElementById('login-id');
-    inp.value = prefix + domain;
-    hideEmailSuggestions();
-    document.getElementById('login-pw').focus();
-  }
-
-  function onEmailInput(val){ buildSuggestions(val); }
-  function onEmailFocus(val){ buildSuggestions(val); }
-
-  function onEmailKeydown(e){
-    const sugg = document.getElementById('email-suggestions');
-    const items = sugg ? sugg.querySelectorAll('div[data-domain]') : [];
-    if(sugg && sugg.style.display !== 'none' && items.length > 0){
-      if(e.key === 'ArrowDown'){
-        e.preventDefault();
-        emailSuggIdx = Math.min(emailSuggIdx + 1, items.length - 1);
-        items.forEach((el,i)=>{ el.style.background = i===emailSuggIdx ? '#f0f0f0' : ''; });
-        return;
-      }
-      if(e.key === 'ArrowUp'){
-        e.preventDefault();
-        emailSuggIdx = Math.max(emailSuggIdx - 1, 0);
-        items.forEach((el,i)=>{ el.style.background = i===emailSuggIdx ? '#f0f0f0' : ''; });
-        return;
-      }
-      if(e.key === 'Enter' && emailSuggIdx >= 0){
-        e.preventDefault();
-        const sel = items[emailSuggIdx];
-        const inp = document.getElementById('login-id');
-        const val = inp.value;
-        const atIdx = val.indexOf('@');
-        const prefix = atIdx >= 0 ? val.substring(0, atIdx + 1) : val + '@';
-        selectDomain(sel.dataset.domain, prefix);
-        return;
-      }
-      if(e.key === 'Escape'){ hideEmailSuggestions(); return; }
-    }
-    if(e.key === 'Enter') document.getElementById('login-pw').focus();
-  }
-
-  function hideEmailSuggestions(){
-    const sugg = document.getElementById('email-suggestions');
-    if(sugg) sugg.style.display = 'none';
-    emailSuggIdx = -1;
-  }
-  // ─────────────────────────────────────────────────────────
 
   window.doLogout = async function(){
     try {
