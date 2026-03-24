@@ -675,7 +675,7 @@ body{display:flex;flex-direction:column;height:100vh;font-family:'Noto Sans KR',
         return;
       }
     } catch(e){}
-    setTimeout(()=>{ try{ startNewProduct(true); }catch(e){} }, 50);
+    setTimeout(()=>{ try{ startNewProduct(true); }catch(e){} }, 300);
   }
 
   async function checkSession(){
@@ -688,7 +688,7 @@ body{display:flex;flex-direction:column;height:100vh;font-family:'Noto Sans KR',
           openAdminPanel();
           return;
         }
-        setTimeout(()=>{ try{ startNewProduct(true); }catch(e){} }, 50);
+        setTimeout(()=>{ try{ startNewProduct(true); }catch(e){} }, 300);
       }
     } catch(e){}
   }
