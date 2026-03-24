@@ -539,12 +539,15 @@ body{display:flex;flex-direction:column;height:100vh;font-family:'Noto Sans KR',
 <script>
 (function(){
   const SUPABASE_URL = 'https://vxwtwawvncwfxgwxpfkq.supabase.co';
-  const SUPABASE_PUBLISHABLE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.sb_publishable_PiTS0rwi04s2IUZvc_9zmA_pY68PPu_";
+  const SUPABASE_ANON = 'sb_publishable_PiTS0rwi04s2IUZvc_9zmA_pY68PPu_';
+  let turnstileToken = '';
+  window.onTurnstileSuccess = function(token){ turnstileToken = token; };
   let authMode = 'login';
 
   let _authClient = null;
   function getAuthClient(){
     if(!_authClient){
+      if(!window.supabase || !window.supabase.createClient) throw new Error('Supabase 라이브러리 로딩 실패.');
       _authClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
     }
     return _authClient;
