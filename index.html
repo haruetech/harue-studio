@@ -473,7 +473,6 @@ body{display:flex;flex-direction:column;height:100vh;font-family:'Noto Sans KR',
 
 </style>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
 </head>
 <body>
 
@@ -509,9 +508,7 @@ body{display:flex;flex-direction:column;height:100vh;font-family:'Noto Sans KR',
       </div>
       <div class="login-info" id="login-info"></div>
       <div class="login-error" id="login-error"></div>
-      <div id="turnstile-wrap" style="margin-bottom:10px;">
-        <div id="turnstile-widget"></div>
-      </div>
+
       <button class="login-btn" id="login-submit-btn" onclick="submitAuth()">로그인</button>
     </div>
 
@@ -532,26 +529,7 @@ body{display:flex;flex-direction:column;height:100vh;font-family:'Noto Sans KR',
 (function(){
   const SUPABASE_URL = 'https://vxwtwawvncwfxgwxpfkq.supabase.co';
   const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZ4d3R3YXd2bmN3Znhnd3hwZmtxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM3NTQ2MTAsImV4cCI6MjA4OTMzMDYxMH0.1c3UKVc85iuJEOBQMQH7y3LdU-cQdRclCG2ZXofz8qw';
-  let turnstileToken = '';
-  let turnstileWidgetId = null;
-  window.onTurnstileSuccess = function(token){ turnstileToken = token; };
 
-  function renderTurnstile(){
-    const container = document.getElementById('turnstile-widget');
-    if(!container) return;
-    if(turnstileWidgetId !== null && window.turnstile){
-      try{ window.turnstile.remove(turnstileWidgetId); }catch(e){}
-      turnstileWidgetId = null;
-    }
-    turnstileToken = '';
-    if(window.turnstile && window.turnstile.render){
-      turnstileWidgetId = window.turnstile.render(container, {
-        sitekey: '0x4AAAAAACvSSZylucx-fVgz',
-        theme: 'light',
-        callback: function(token){ turnstileToken = token; }
-      });
-    }
-  }
   let authMode = 'login';
 
   let _authClient = null;
@@ -600,7 +578,6 @@ body{display:flex;flex-direction:column;height:100vh;font-family:'Noto Sans KR',
       loginBtn.style.background = '#fff'; loginBtn.style.color = '#666';
       signupBtn.style.background = '#1a1a1a'; signupBtn.style.color = '#fff';
       confirmWrap.style.display = 'block';
-      document.getElementById('turnstile-wrap').style.display = 'block';
       pwInput.placeholder = '새 비밀번호 입력';
       pwInput.autocomplete = 'new-password';
       pwLabel.textContent = '새 비밀번호';
@@ -609,8 +586,7 @@ body{display:flex;flex-direction:column;height:100vh;font-family:'Noto Sans KR',
       loginBtn.style.background = '#1a1a1a'; loginBtn.style.color = '#fff';
       signupBtn.style.background = '#fff'; signupBtn.style.color = '#666';
       confirmWrap.style.display = 'none';
-      document.getElementById('turnstile-wrap').style.display = 'block';
-      turnstileToken = '';
+      
       pwInput.placeholder = '비밀번호 입력';
       pwInput.autocomplete = 'current-password';
       pwLabel.textContent = '비밀번호';
@@ -628,8 +604,6 @@ body{display:flex;flex-direction:column;height:100vh;font-family:'Noto Sans KR',
     document.getElementById('login-id-confirm').value = email;
     document.getElementById('login-step-1').style.display = 'none';
     document.getElementById('login-step-2').style.display = 'block';
-    document.getElementById('turnstile-wrap').style.display = 'block';
-    renderTurnstile();
     setAuthMode('login');
     setTimeout(()=>{ document.getElementById('login-pw').focus(); }, 50);
   };
@@ -647,8 +621,6 @@ body{display:flex;flex-direction:column;height:100vh;font-family:'Noto Sans KR',
   window.backToLoginFromVerify = function(){
     document.getElementById('login-step-3').style.display = 'none';
     document.getElementById('login-step-2').style.display = 'block';
-    document.getElementById('turnstile-wrap').style.display = 'block';
-    renderTurnstile();
     setAuthMode('login');
     setError('');
     setInfo('');
@@ -672,8 +644,6 @@ body{display:flex;flex-direction:column;height:100vh;font-family:'Noto Sans KR',
     } catch(e){}
   }
   checkSession();
-  // 캡차 위젯 초기 렌더링
-  setTimeout(renderTurnstile, 500);
 
   window.submitAuth = async function(){
     const email = (document.getElementById('login-id-confirm').value || document.getElementById('login-id').value || '').trim();
@@ -705,7 +675,7 @@ body{display:flex;flex-direction:column;height:100vh;font-family:'Noto Sans KR',
     try {
       const sb = getAuthClient();
       if(authMode === 'signup'){
-        const { data, error } = await sb.auth.signUp({ email, password: pw, options: { captchaToken: turnstileToken } });
+        const { data, error } = await sb.auth.signUp({ email, password: pw });
         if(error){
           if(error.message?.includes('already registered')){
             setError('이미 가입된 이메일입니다. 로그인으로 진행해주세요.');
@@ -730,7 +700,7 @@ body{display:flex;flex-direction:column;height:100vh;font-family:'Noto Sans KR',
           }
         }
       } else {
-        const { error } = await sb.auth.signInWithPassword({ email, password: pw, options: { captchaToken: turnstileToken } });
+        const { error } = await sb.auth.signInWithPassword({ email, password: pw });
         if(error){
           setError('이메일 또는 비밀번호가 올바르지 않습니다.');
           document.getElementById('login-pw').value = '';
@@ -758,7 +728,9 @@ body{display:flex;flex-direction:column;height:100vh;font-family:'Noto Sans KR',
     document.getElementById('login-pw').value = '';
     const confirm = document.getElementById('login-pw-confirm');
     if(confirm) confirm.value = '';
-    backToLoginEmail();
+    setError('');
+    setInfo('');
+    setAuthMode('login');
     document.getElementById('login-overlay').classList.remove('hidden');
   };
 })();
