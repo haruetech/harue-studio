@@ -2199,14 +2199,13 @@ function openInitialProductInfoScreen(){
   const arr = document.getElementById('arr-acc-c-info');
   if(body) body.classList.add('open');
   if(arr) arr.classList.add('open');
-  setTimeout(()=>{
+  function doScroll(){
     try{
       const sidebarBody = document.querySelector('.sidebar-body');
       const header = body ? body.previousElementSibling : null;
       if(sidebarBody && header){
         sidebarBody.scrollTop = header.offsetTop - 8;
       }
-
       const previewWrap = document.querySelector('.preview-wrap');
       const productInfoSection = document.getElementById('pd-info-section');
       if(previewWrap && productInfoSection){
@@ -2214,7 +2213,10 @@ function openInitialProductInfoScreen(){
         previewWrap.scrollTo({ top: targetTop, behavior: 'smooth' });
       }
     }catch(e){}
-  }, 30);
+  }
+  setTimeout(doScroll, 80);
+  setTimeout(doScroll, 300);
+  setTimeout(doScroll, 700);
 }
 
 // ============================================================
