@@ -6959,7 +6959,12 @@ function buildSabangRow(){
   const origin = cleanSabangText(normalizeSabangOrigin(getInfoValueByKey('제조국') || document.getElementById('reg-origin')?.value || '대한민국'), 50);
   const colorOptions = getColorOptionString();
   const sizeOptions = getSizeOptionString();
-  const displayedName = cleanSabangText(itemCode ? `${productName} (${itemCode})` : productName, 255);
+  const normalizedStyle = styleName.replace(/\s+/g,' ').trim().toLowerCase();
+  const normalizedProduct = productName.replace(/\s+/g,' ').trim().toLowerCase();
+  const mergedProductName = (styleName && productName && !normalizedProduct.startsWith(normalizedStyle))
+    ? `${styleName} ${productName}`.trim()
+    : (productName || styleName);
+  const displayedName = cleanSabangText(itemCode ? `${mergedProductName} (${itemCode})` : mergedProductName, 255);
   const buyerName = cleanSabangText(getBuyerName(), 60);
   const shortName = cleanSabangText(document.getElementById('reg-short-name')?.value || buyerName || productName, 60);
   const modelName = cleanSabangText(wholesaleName || productName, 60);
@@ -7827,9 +7832,17 @@ async function saveCurrentProductRecordToSupabase(uploaded){
   const subImages = uploaded && uploaded.detailUrl ? [uploaded.detailUrl] : [];
   const nowIso = new Date().toISOString();
 
+  const styleName = cleanSabangText(document.getElementById('inp-model-en')?.value || '', 60);
+  const normalizedStyle = styleName.replace(/\s+/g,' ').trim().toLowerCase();
+  const normalizedProduct = productName.replace(/\s+/g,' ').trim().toLowerCase();
+  const mergedProductName = (styleName && productName && !normalizedProduct.startsWith(normalizedStyle))
+    ? `${styleName} ${productName}`.trim()
+    : (productName || styleName);
+
   const payload = {
     item_code: itemCode,
-    product_name: productName,
+    product_name: mergedProductName,
+    style_name: styleName,
     brand: brand,
     price: price,
     main_image: uploaded?.mainUrl || '',
