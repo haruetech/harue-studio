@@ -897,7 +897,8 @@ body{display:flex;flex-direction:column;height:100vh;font-family:'Noto Sans KR',
 <span class="topbar-group-label">출력</span>
 <button class="topbar-btn" onclick="openMobilePreviewWindow()">📱 모바일확인</button>
 <button class="topbar-btn" onclick="openHtmlModal()">📤 스마트스토어용 HTML</button>
-<button class="topbar-btn sabang-btn" onclick="exportSabangnetExcel()">📊 등록파일 생성<span style="font-size:9px;opacity:.85;margin-left:3px;">(사방넷)</span></button>
+<button class="topbar-btn primary" id="btn-confirm-upload" onclick="confirmAndUploadProduct()">✅ 수정확정</button>
+<button class="topbar-btn sabang-btn" id="btn-sabang-export" onclick="exportSabangnetExcel()">📊 등록파일 생성<span style="font-size:9px;opacity:.85;margin-left:3px;">(사방넷)</span></button>
 <button class="topbar-btn hero-dl-btn" onclick="downloadHeroJPG()">⬇ 대표이미지</button>
 <button class="topbar-btn save-btn" onclick="saveHTML()">💾 작업 HTML 저장</button>
 <button class="topbar-btn jpg-btn" id="btn-save-jpg" onclick="saveJPG()">🖼 JPG 저장</button>
@@ -2658,6 +2659,25 @@ async function checkItemCodeDuplicate(code){
 // Google JSONP 함수 — 더 이상 사용하지 않음 (Supabase로 교체됨)
 function jsonpCall(){ return Promise.reject(new Error('JSONP 방식은 사용되지 않습니다.')); }
 
+async function triggerLocalImageAutomation(itemCode){
+  const code = String(itemCode || '').trim();
+  if(!code) return;
+
+  const applyRes = await fetch('http://127.0.0.1:5050/apply-item-code', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ item_code: code })
+  });
+
+  const applyData = await applyRes.json().catch(() => ({}));
+  if(!applyRes.ok || !applyData.ok){
+    throw new Error(applyData.error || applyData.stderr || '품번 전달 또는 이미지 자동 처리 실패');
+  }
+
+  console.log('로컬 이미지 자동 처리 완료', { code, applyData });
+  return applyData;
+}
+
 async function applyGeneratedCodeWithCheck(){
   const btn = document.querySelector('button[onclick="applyGeneratedCodeWithCheck()"]');
   const origText = btn ? btn.textContent : '';
@@ -2723,6 +2743,15 @@ async function applyGeneratedCodeWithCheck(){
 
     const inp = document.getElementById('inp-item-code');
     if(inp){ inp.value = foundCode; syncItemCode(foundCode); }
+
+    // 로컬 Python 브릿지 호출 → current_item_code.txt 저장 + TEMP → WEB 자동 처리
+    try{
+      await triggerLocalImageAutomation(foundCode);
+      console.log('품번 적용 후 로컬 이미지 자동화 완료:', foundCode);
+    }catch(e){
+      console.error('로컬 이미지 자동화 실패:', e);
+      showToast('⚠ 품번 적용은 되었지만 로컬 이미지 자동화 실패');
+    }
 
     // Supabase Storage에 품번 폴더 예약 (.keep 파일 업로드)
     try{
@@ -6996,6 +7025,10 @@ function buildSabangRow(){
   return row;
 }
 async function exportSabangnetExcel(){
+  if(!(window.__productConfirmState && window.__productConfirmState.confirmed && window.__productConfirmState.uploaded)){
+    alert('먼저 "수정확정"을 눌러 Supabase 업로드를 완료해주세요.');
+    return;
+  }
   if(!checkItemCode()) return;
   if(_itemCodeCheck && _itemCodeCheck.ok === false){
     alert(`품번 중복으로 출력이 차단되었습니다.\n\n${_itemCodeCheck.lastMsg || ''}`);
@@ -7726,6 +7759,179 @@ async function uploadCurrentProductImagesToSupabase(){
   const detailUrl = await uploadBlobToSupabase('products', detailPath, detailBlob, 'image/jpeg');
   return { mainUrl, detailUrl };
 }
+
+window.__productConfirmState = window.__productConfirmState || {
+  confirmed:false,
+  uploaded:false,
+  mainUrl:'',
+  detailUrl:'',
+  confirmedAt:''
+};
+
+function updateConfirmUi(){
+  const btn = document.getElementById('btn-confirm-upload');
+  const exportBtn = document.getElementById('btn-sabang-export');
+  const st = window.__productConfirmState || {};
+  if(btn){
+    if(st.confirmed && st.uploaded){
+      btn.textContent = '✅ 수정확정 완료';
+      btn.style.background = '#2a6e2a';
+      btn.style.color = '#fff';
+    }else{
+      btn.textContent = '✅ 수정확정';
+      btn.style.background = '#c8a96e';
+      btn.style.color = '#000';
+    }
+  }
+  if(exportBtn){
+    const ok = !!(st.confirmed && st.uploaded);
+    exportBtn.disabled = !ok;
+    exportBtn.style.opacity = ok ? '1' : '.55';
+    exportBtn.style.cursor = ok ? 'pointer' : 'not-allowed';
+  }
+}
+
+function markProductDirty(){
+  const st = window.__productConfirmState || {};
+  if(st.confirmed || st.uploaded){
+    window.__productConfirmState = {
+      confirmed:false,
+      uploaded:false,
+      mainUrl:'',
+      detailUrl:'',
+      confirmedAt:''
+    };
+    updateConfirmUi();
+    showToast('수정 내용이 변경되어 수정확정이 해제되었습니다.');
+  }
+}
+
+
+async function saveCurrentProductRecordToSupabase(uploaded){
+  const client = getSupabaseClient();
+  const itemCode = cleanSabangText(getCurrentItemCode(), 60);
+  if(!itemCode) throw new Error('품번이 없습니다.');
+
+  const productName = cleanSabangText(document.getElementById('inp-name')?.value || '', 255);
+  const brand = cleanSabangText(
+    document.getElementById('reg-brand-name')?.value ||
+    normalizeRegisterBrand(document.getElementById('inp-brand')?.value || ''),
+    50
+  );
+  const price = toSabangMoneyValue(
+    document.getElementById('reg-sell-price')?.value ||
+    document.getElementById('reg-price')?.value ||
+    document.getElementById('inp-price')?.value || ''
+  );
+  const detailHtml = buildSabangDetailHTML();
+  const subImages = uploaded && uploaded.detailUrl ? [uploaded.detailUrl] : [];
+  const nowIso = new Date().toISOString();
+
+  const payload = {
+    item_code: itemCode,
+    product_name: productName,
+    brand: brand,
+    price: price,
+    main_image: uploaded?.mainUrl || '',
+    sub_images: subImages,
+    html: detailHtml,
+    updated_at: nowIso
+  };
+
+  // 1) item_code로 기존 행 존재 여부 확인
+  const { data: existingRow, error: selectError } = await client
+    .from('products')
+    .select('id,item_code')
+    .eq('item_code', itemCode)
+    .maybeSingle();
+
+  if(selectError){
+    throw new Error('products 조회 실패: ' + (selectError.message || JSON.stringify(selectError)));
+  }
+
+  // 2) 있으면 update, 없으면 insert (item_code unique 제약 없어도 동작)
+  if(existingRow && existingRow.id){
+    const { error: updateError } = await client
+      .from('products')
+      .update(payload)
+      .eq('id', existingRow.id);
+
+    if(updateError){
+      throw new Error('products 수정 실패: ' + (updateError.message || JSON.stringify(updateError)));
+    }
+  } else {
+    const insertPayload = {
+      ...payload,
+      created_at: nowIso
+    };
+
+    const { error: insertError } = await client
+      .from('products')
+      .insert(insertPayload);
+
+    if(insertError){
+      throw new Error('products 등록 실패: ' + (insertError.message || JSON.stringify(insertError)));
+    }
+  }
+
+  return payload;
+}
+
+async function confirmAndUploadProduct(){
+  if(!checkItemCode()) return;
+  if(_itemCodeCheck && _itemCodeCheck.ok === false){
+    alert(`품번 중복으로 출력이 차단되었습니다.\n\n${_itemCodeCheck.lastMsg || ''}`);
+    return;
+  }
+  const btn = document.getElementById('btn-confirm-upload');
+  const oldText = btn ? btn.textContent : '';
+  try{
+    if(btn){ btn.disabled = true; btn.textContent = '확정 처리 중...'; }
+    saveImageBaseUrl(document.getElementById('img-base-url')?.value || '');
+    if(!getImageBaseUrl()) throw new Error('이미지 Public Base URL을 확인해주세요.');
+    if(!getSupabaseAnonKey()) throw new Error('Supabase anon key를 확인해주세요.');
+
+    // JPG 미리생성이 안 되어 있으면 자동 생성
+    let builtReady = true;
+    try{ ensureBuiltAssetsReady(); }catch(e){ builtReady = false; }
+    if(!builtReady){
+      await buildJpgPreviewAssets();
+    }
+
+    const built = ensureBuiltAssetsReady();
+    const ok = confirm(
+      `수정확정 후 Supabase에 업로드합니다.\n\n대표: ${built.main.filename} (${bytesToSize(built.main.size)})\n상세: ${built.detail.filename} (${bytesToSize(built.detail.size)})\n\n계속 진행할까요?`
+    );
+    if(!ok) return;
+
+    const uploaded = await uploadCurrentProductImagesToSupabase();
+    await saveCurrentProductRecordToSupabase(uploaded);
+
+    window.__productConfirmState = {
+      confirmed:true,
+      uploaded:true,
+      mainUrl: uploaded.mainUrl || '',
+      detailUrl: uploaded.detailUrl || '',
+      confirmedAt: new Date().toISOString()
+    };
+
+    try{
+      localStorage.setItem('harue_confirm_state', JSON.stringify(window.__productConfirmState));
+    }catch(e){}
+
+    updateConfirmUi();
+    showToast('✅ 수정확정 완료 · Supabase 업로드 + products 저장 완료');
+    alert('수정확정, Supabase 업로드, products 테이블 저장이 완료되었습니다.\n이제 사방넷 등록파일 생성이 가능합니다.');
+
+  }catch(err){
+    console.error(err);
+    alert('수정확정 처리 중 오류가 발생했습니다.\n' + (err.message || err));
+  }finally{
+    if(btn){ btn.disabled = false; btn.textContent = oldText || '✅ 수정확정'; }
+    updateConfirmUi();
+  }
+}
+
 async function confirmUploadAndExportSabangExcel(){
   if(!checkItemCode()) return;
   if(_itemCodeCheck && _itemCodeCheck.ok === false){
@@ -7786,6 +7992,29 @@ function init(){
   }catch(e){}
   loadImageBaseUrl();
   loadSupabaseAnonKey();
+  try{
+    const savedConfirm = localStorage.getItem('harue_confirm_state');
+    if(savedConfirm){
+      window.__productConfirmState = JSON.parse(savedConfirm) || window.__productConfirmState;
+    }
+  }catch(e){}
+  updateConfirmUi();
+
+  document.addEventListener('input', function(ev){
+    const t = ev.target;
+    if(!t) return;
+    if(t.closest && t.closest('#jpg-preview-panel')) return;
+    if(t.id === 'img-base-url' || t.id === 'supabase-anon-key') return;
+    if(['INPUT','TEXTAREA','SELECT'].includes(t.tagName)) markProductDirty();
+  }, true);
+
+  document.addEventListener('change', function(ev){
+    const t = ev.target;
+    if(!t) return;
+    if(t.closest && t.closest('#jpg-preview-panel')) return;
+    if(t.id === 'img-base-url' || t.id === 'supabase-anon-key') return;
+    if(['INPUT','TEXTAREA','SELECT'].includes(t.tagName)) markProductDirty();
+  }, true);
 
   buildColorSidebar(); updateColors();
   buildPointsSidebar(); updatePoints();
