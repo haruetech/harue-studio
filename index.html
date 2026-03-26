@@ -493,74 +493,6 @@ body{display:flex;flex-direction:column;height:100vh;font-family:'Noto Sans KR',
 }
 .login-error.show{display:block;}
 
-
-/* ═══════════════════════════════════════
-   MOBILE RESPONSIVE — 768px 이하
-═══════════════════════════════════════ */
-@media (max-width: 768px) {
-
-  /* body 스크롤 허용 */
-  body { height: 100dvh; overflow: hidden; }
-
-  /* TOPBAR: 좌측 브랜드만 고정, 우측은 가로 스크롤 */
-  .topbar { padding: 0 8px; gap: 6px; height: 48px; }
-  .topbar-title { font-size: 10px; letter-spacing: 1px; }
-  .topbar-badge { display: none; }
-  .topbar-logo-img, .topbar-logo-placeholder { width: 28px; height: 28px; }
-  .topbar-actions {
-    overflow-x: auto;
-    overflow-y: hidden;
-    -webkit-overflow-scrolling: touch;
-    scrollbar-width: none;
-    flex-shrink: 1;
-    min-width: 0;
-  }
-  .topbar-actions::-webkit-scrollbar { display: none; }
-  .topbar-group-label { display: none; }
-  .topbar-group { padding-left: 6px; gap: 3px; }
-  .topbar-btn { font-size: 10px; padding: 4px 7px; }
-  #width-slider { width: 60px; }
-
-  /* MAIN: 세로 스택으로 전환 */
-  .main { flex-direction: column; overflow: hidden; }
-
-  /* PREVIEW: 상단, 전체 너비, 스크롤 가능 */
-  .preview-wrap {
-    flex: 1;
-    width: 100%;
-    overflow-y: auto;
-    -webkit-overflow-scrolling: touch;
-    padding: 8px;
-    min-height: 0;
-  }
-
-  /* SIDEBAR: 하단 서랍 */
-  .sidebar {
-    width: 100% !important;
-    height: 0;
-    flex-shrink: 0;
-    border-right: none;
-    border-top: 2px solid #c8a96e;
-    overflow: hidden;
-    transition: height 0.3s ease;
-    position: relative;
-    z-index: 50;
-  }
-  .sidebar.mobile-open {
-    height: 55dvh;
-  }
-  .sidebar-body { overflow-y: auto; -webkit-overflow-scrolling: touch; }
-
-  /* 사이드바 토글 버튼 */
-  #mobile-sidebar-toggle {
-    display: flex !important;
-  }
-
-  /* preview toolbar 조정 */
-  .preview-toolbar { padding: 6px 8px; gap: 6px; flex-wrap: wrap; }
-  .preview-title { font-size: 10px; }
-  .preview-popup-btn { font-size: 10px; padding: 4px 8px; }
-}
 </style>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
@@ -729,77 +661,22 @@ body{display:flex;flex-direction:column;height:100vh;font-family:'Noto Sans KR',
     setTimeout(()=>{ document.getElementById('login-pw').focus(); }, 50);
   };
 
-  function onAuthSuccess(email){
+  async function onAuthSuccess(){
     document.getElementById('login-overlay').classList.add('hidden');
     setError('');
-    if(email === ADMIN_EMAIL){
-      const adminBtn = document.getElementById('admin-panel-btn');
-      if(adminBtn) adminBtn.style.display='inline-block';
-      openAdminPanel();
-      return;
-    }
-    setTimeout(()=>{ try{ startNewProduct(true); }catch(e){} }, 300);
-  }
-
-  // ── 관리자 패널 ──────────────────────────────────────────
-  window.openAdminPanel = async function(){
-    document.getElementById('admin-overlay').classList.remove('hidden');
-    await loadAdminUsers();
-  };
-
-  window.closeAdminPanel = function(){
-    document.getElementById('admin-overlay').classList.add('hidden');
-  };
-
-  async function loadAdminUsers(){
-    const list = document.getElementById('admin-user-list');
-    list.innerHTML = '<div class="admin-empty">불러오는 중...</div>';
+    // 관리자 이메일이면 승인 관리 패널 오픈
     try {
       const sb = getAuthClient();
-      const { data, error } = await sb.from('user_approvals')
-        .select('*').order('created_at', { ascending: false });
-      if(error || !data || data.length === 0){
-        list.innerHTML = '<div class="admin-empty">가입 신청자가 없습니다.</div>';
+      const { data:{ user } } = await sb.auth.getUser();
+      if(user && user.email === ADMIN_EMAIL){
+        const adminBtn = document.getElementById('admin-panel-btn');
+        if(adminBtn) adminBtn.style.display='inline-block';
+        openAdminPanel();
         return;
       }
-      list.innerHTML = '';
-      data.forEach(row => {
-        const div = document.createElement('div');
-        div.className = 'admin-row';
-        const date = new Date(row.created_at).toLocaleDateString('ko-KR');
-        div.innerHTML = `
-          <div class="admin-row-email">${row.email}</div>
-          <div class="admin-row-date">${date}</div>
-          <span class="admin-badge ${row.approved ? 'approved' : 'pending'}">${row.approved ? '승인됨' : '대기중'}</span>
-          <button class="admin-approve-btn ${row.approved ? 'revoke' : ''}"
-            onclick="toggleApproval('${row.user_id}', ${row.approved}, this)">
-            ${row.approved ? '취소' : '승인'}
-          </button>`;
-        list.appendChild(div);
-      });
-    } catch(e){
-      list.innerHTML = '<div class="admin-empty">불러오기 실패: ' + e.message + '</div>';
-    }
+    } catch(e){}
+    setTimeout(()=>{ try{ startNewProduct(true); }catch(e){} }, 300);
   }
-
-  window.toggleApproval = async function(userId, currentApproved, btn){
-    btn.disabled = true;
-    btn.textContent = '처리중...';
-    try {
-      const sb = getAuthClient();
-      const newVal = !currentApproved;
-      const { error } = await sb.from('user_approvals')
-        .update({ approved: newVal }).eq('user_id', userId);
-      if(error) throw error;
-      await loadAdminUsers();
-    } catch(e){
-      console.error('toggleApproval 오류:', e);
-      alert('승인 처리 실패: ' + (e.message || JSON.stringify(e)) + '\n\nSupabase user_approvals 테이블의 RLS 정책을 확인해주세요.\n(UPDATE 권한이 anon/authenticated 역할에 허용되어 있는지 확인)');
-      btn.disabled = false;
-      btn.textContent = currentApproved ? '취소' : '승인';
-    }
-  };
-  // ─────────────────────────────────────────────────────────
 
   async function checkSession(){
     try {
@@ -808,8 +685,6 @@ body{display:flex;flex-direction:column;height:100vh;font-family:'Noto Sans KR',
       if(session){
         document.getElementById('login-overlay').classList.add('hidden');
         if(session.user.email === ADMIN_EMAIL){
-          const adminBtn = document.getElementById('admin-panel-btn');
-          if(adminBtn) adminBtn.style.display='inline-block';
           openAdminPanel();
           return;
         }
@@ -884,7 +759,7 @@ body{display:flex;flex-direction:column;height:100vh;font-family:'Noto Sans KR',
         } else {
           // ── 관리자는 승인 체크 없이 바로 입장 ──
           if(signInData.user.email === ADMIN_EMAIL){
-            onAuthSuccess(signInData.user.email);
+            await onAuthSuccess();
           } else {
             // ── 일반 유저 승인 여부 확인 ──
             const { data: approval } = await sb.from('user_approvals')
@@ -896,7 +771,7 @@ body{display:flex;flex-direction:column;height:100vh;font-family:'Noto Sans KR',
               setError('관리자 승인 대기 중입니다. 승인 후 로그인 가능합니다.');
               document.getElementById('login-pw').value = '';
             } else {
-              onAuthSuccess(signInData.user.email);
+              await onAuthSuccess();
             }
           }
         }
@@ -909,6 +784,65 @@ body{display:flex;flex-direction:column;height:100vh;font-family:'Noto Sans KR',
   };
 
 
+
+  // ── 관리자 패널 ──────────────────────────────────────────
+  window.openAdminPanel = async function(){
+    document.getElementById('admin-overlay').classList.remove('hidden');
+    await loadAdminUsers();
+  };
+
+  window.closeAdminPanel = function(){
+    document.getElementById('admin-overlay').classList.add('hidden');
+  };
+
+  async function loadAdminUsers(){
+    const list = document.getElementById('admin-user-list');
+    list.innerHTML = '<div class="admin-empty">불러오는 중...</div>';
+    try {
+      const sb = getAuthClient();
+      const { data, error } = await sb.from('user_approvals')
+        .select('*').order('created_at', { ascending: false });
+      if(error || !data || data.length === 0){
+        list.innerHTML = '<div class="admin-empty">가입 신청자가 없습니다.</div>';
+        return;
+      }
+      list.innerHTML = '';
+      data.forEach(row => {
+        const div = document.createElement('div');
+        div.className = 'admin-row';
+        const date = new Date(row.created_at).toLocaleDateString('ko-KR');
+        div.innerHTML = `
+          <div class="admin-row-email">${row.email}</div>
+          <div class="admin-row-date">${date}</div>
+          <span class="admin-badge ${row.approved ? 'approved' : 'pending'}">${row.approved ? '승인됨' : '대기중'}</span>
+          <button class="admin-approve-btn ${row.approved ? 'revoke' : ''}"
+            onclick="toggleApproval('${row.user_id}', ${row.approved}, this)">
+            ${row.approved ? '취소' : '승인'}
+          </button>`;
+        list.appendChild(div);
+      });
+    } catch(e){
+      list.innerHTML = '<div class="admin-empty">불러오기 실패: ' + e.message + '</div>';
+    }
+  }
+
+  window.toggleApproval = async function(userId, currentApproved, btn){
+    btn.disabled = true;
+    btn.textContent = '처리중...';
+    try {
+      const sb = getAuthClient();
+      const newVal = !currentApproved;
+      const { error } = await sb.from('user_approvals')
+        .update({ approved: newVal }).eq('user_id', userId);
+      if(error) throw error;
+      await loadAdminUsers(); // 새로고침
+    } catch(e){
+      alert('오류: ' + e.message);
+      btn.disabled = false;
+      btn.textContent = currentApproved ? '취소' : '승인';
+    }
+  };
+  // ─────────────────────────────────────────────────────────
 
   window.doLogout = async function(){
     try {
@@ -936,11 +870,10 @@ body{display:flex;flex-direction:column;height:100vh;font-family:'Noto Sans KR',
 <input id="topbar-logo-input" type="file" accept="image/*" style="display:none;" onchange="changeTopbarLogo(event)"/>
 </div>
 <div class="topbar-title" style="flex-shrink:0;">HARU'E PICK · 상세페이지 큐레이션<span class="topbar-badge">v2</span></div>
-<button class="topbar-btn" onclick="doLogout()" style="flex-shrink:0;background:#444;color:#ccc;font-size:11px;" title="로그아웃">🔓 로그아웃</button>
-<button id="mobile-sidebar-toggle" onclick="toggleMobileSidebar()" style="display:none;flex-shrink:0;background:#c8a96e;color:#000;font-size:11px;font-weight:700;border:none;padding:5px 10px;border-radius:4px;cursor:pointer;">☰ 편집</button>
 </div>
 <div class="topbar-actions">
 <div class="topbar-group" style="padding-left:0;border-left:none;">
+<button class="topbar-btn" onclick="doLogout()" style="background:#555;color:#fff;" title="로그아웃">🔓 로그아웃</button>
 <button class="topbar-btn" id="admin-panel-btn" onclick="openAdminPanel()" style="display:none;background:#c8a96e;color:#000;font-weight:700;" title="가입 승인 관리">👤 승인관리</button>
 <button class="topbar-btn reset-btn" onclick="startNewProduct()" title="현재 상품 데이터 초기화 후 새 작업 시작">🆕 신규 작성</button>
 
@@ -7409,91 +7342,7 @@ async function saveHTML(){
   // 저장된 HTML에서 product-page 가로를 1000px 고정
   const fixedWidthStyle = `\n<style id="saved-width-fix">\n#product-page{width:1000px!important;min-width:1000px!important;max-width:1000px!important;}\n</style>\n`;
 
-  if(html.includes('
-<script>
-// ── Mobile sidebar toggle ──────────────────
-function toggleMobileSidebar(){
-  const sidebar = document.querySelector('.sidebar');
-  const btn = document.getElementById('mobile-sidebar-toggle');
-  if(!sidebar) return;
-  const isOpen = sidebar.classList.toggle('mobile-open');
-  if(btn) btn.textContent = isOpen ? '✕ 닫기' : '☰ 편집';
-}
-
-function applyMobileLayout(){
-  const isMobile = window.innerWidth <= 768;
-  const toggleBtn = document.getElementById('mobile-sidebar-toggle');
-  if(toggleBtn) toggleBtn.style.display = isMobile ? 'inline-flex' : 'none';
-  if(!isMobile){
-    // 데스크탑으로 돌아오면 서랍 닫기
-    const sidebar = document.querySelector('.sidebar');
-    if(sidebar){ sidebar.classList.remove('mobile-open'); }
-    if(toggleBtn) toggleBtn.textContent = '☰ 편집';
-  }
-}
-
-window.addEventListener('resize', applyMobileLayout);
-document.addEventListener('DOMContentLoaded', applyMobileLayout);
-applyMobileLayout();
-</script>
-
-</body>')) html = html.replace('
-<script>
-// ── Mobile sidebar toggle ──────────────────
-function toggleMobileSidebar(){
-  const sidebar = document.querySelector('.sidebar');
-  const btn = document.getElementById('mobile-sidebar-toggle');
-  if(!sidebar) return;
-  const isOpen = sidebar.classList.toggle('mobile-open');
-  if(btn) btn.textContent = isOpen ? '✕ 닫기' : '☰ 편집';
-}
-
-function applyMobileLayout(){
-  const isMobile = window.innerWidth <= 768;
-  const toggleBtn = document.getElementById('mobile-sidebar-toggle');
-  if(toggleBtn) toggleBtn.style.display = isMobile ? 'inline-flex' : 'none';
-  if(!isMobile){
-    // 데스크탑으로 돌아오면 서랍 닫기
-    const sidebar = document.querySelector('.sidebar');
-    if(sidebar){ sidebar.classList.remove('mobile-open'); }
-    if(toggleBtn) toggleBtn.textContent = '☰ 편집';
-  }
-}
-
-window.addEventListener('resize', applyMobileLayout);
-document.addEventListener('DOMContentLoaded', applyMobileLayout);
-applyMobileLayout();
-</script>
-
-</body>', fixedWidthStyle + embedded + '
-<script>
-// ── Mobile sidebar toggle ──────────────────
-function toggleMobileSidebar(){
-  const sidebar = document.querySelector('.sidebar');
-  const btn = document.getElementById('mobile-sidebar-toggle');
-  if(!sidebar) return;
-  const isOpen = sidebar.classList.toggle('mobile-open');
-  if(btn) btn.textContent = isOpen ? '✕ 닫기' : '☰ 편집';
-}
-
-function applyMobileLayout(){
-  const isMobile = window.innerWidth <= 768;
-  const toggleBtn = document.getElementById('mobile-sidebar-toggle');
-  if(toggleBtn) toggleBtn.style.display = isMobile ? 'inline-flex' : 'none';
-  if(!isMobile){
-    // 데스크탑으로 돌아오면 서랍 닫기
-    const sidebar = document.querySelector('.sidebar');
-    if(sidebar){ sidebar.classList.remove('mobile-open'); }
-    if(toggleBtn) toggleBtn.textContent = '☰ 편집';
-  }
-}
-
-window.addEventListener('resize', applyMobileLayout);
-document.addEventListener('DOMContentLoaded', applyMobileLayout);
-applyMobileLayout();
-</script>
-
-</body>');
+  if(html.includes('</body>')) html = html.replace('</body>', fixedWidthStyle + embedded + '</body>');
   else html += fixedWidthStyle + embedded;
 
   const blob = new Blob([html],{type:'text/html;charset=utf-8'});
@@ -8356,33 +8205,5 @@ document.addEventListener('change', function(e){
 // ─────────────────────────────────────────────────────────────────────────────
 
 </script>
-
-<script>
-// ── Mobile sidebar toggle ──────────────────
-function toggleMobileSidebar(){
-  const sidebar = document.querySelector('.sidebar');
-  const btn = document.getElementById('mobile-sidebar-toggle');
-  if(!sidebar) return;
-  const isOpen = sidebar.classList.toggle('mobile-open');
-  if(btn) btn.textContent = isOpen ? '✕ 닫기' : '☰ 편집';
-}
-
-function applyMobileLayout(){
-  const isMobile = window.innerWidth <= 768;
-  const toggleBtn = document.getElementById('mobile-sidebar-toggle');
-  if(toggleBtn) toggleBtn.style.display = isMobile ? 'inline-flex' : 'none';
-  if(!isMobile){
-    // 데스크탑으로 돌아오면 서랍 닫기
-    const sidebar = document.querySelector('.sidebar');
-    if(sidebar){ sidebar.classList.remove('mobile-open'); }
-    if(toggleBtn) toggleBtn.textContent = '☰ 편집';
-  }
-}
-
-window.addEventListener('resize', applyMobileLayout);
-document.addEventListener('DOMContentLoaded', applyMobileLayout);
-applyMobileLayout();
-</script>
-
 </body>
 </html>
