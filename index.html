@@ -2812,8 +2812,8 @@ function parseCmNumber(raw){
 function inferCategoryLabel(){
   const sel = document.getElementById('gen-item');
   const label = sel?.options?.[sel.selectedIndex]?.text || '';
-  if(label.includes('슬링백')) return '슬링백 펌프스';
   if(label.includes('펌프스')) return '펌프스';
+  if(label.includes('슬링백')) return '슬링백';
   if(label.includes('플랫')) return '플랫슈즈';
   if(label.includes('로퍼')) return '로퍼';
   if(label.includes('샌들')) return '샌들';
@@ -2833,6 +2833,62 @@ function inferHeelDescriptor(rawHeel){
   if(cm <= 4.0) return '소프트';
   if(cm <= 6.0) return '밸런스';
   return '엘레강스';
+}
+
+async function pickAvailableStyleName(stylePool){
+  const pool = Array.isArray(stylePool) ? stylePool.slice() : [];
+  if(!pool.length || typeof checkStyleNameDuplicate !== 'function') return '';
+  const currentItemCode = cleanSabangText(getCurrentItemCode(), 60);
+  for(const candidate of pool){
+    const name = normalizeStyleNameKey(candidate);
+    if(!name) continue;
+    const result = await checkStyleNameDuplicate(name, currentItemCode);
+    if(result && result.ok) return name;
+  }
+  return '';
+}
+
+function detectGenItemFromText(raw){
+  const compact = String(raw || '').toLowerCase().replace(/\s+/g,'');
+  if(!compact) return '';
+  const has = (...words) => words.some(word => compact.includes(String(word).toLowerCase().replace(/\s+/g,'')));
+
+  if((has('슬링백','slingback') && has('펌프스','pump','pumps')) || has('슬링백펌프스','slingbackpumps')) return 'PU';
+  if(has('펌프스','pump','pumps')) return 'PU';
+  if(has('슬링백','slingback')) return 'SB';
+  if(has('메리제인','maryjane','mary-jane')) return 'LF';
+  if(has('로퍼','loafer')) return 'LF';
+  if(has('플랫','flat')) return 'FL';
+  if(has('샌들','sandal')) return 'SD';
+  if(has('슬리퍼','slipper')) return 'SP';
+  if(has('뮬','mule')) return 'MU';
+  if(has('블로퍼','bloafer')) return 'BF';
+  if(has('워커','walker')) return 'WK';
+  if(has('부츠','부티','앵클','boot','boots')) return 'BT';
+  if(has('스니커즈','운동화','sneaker','sneakers')) return 'SN';
+  if(has('슬립온','slipon','slip-on')) return 'SO';
+  if(has('웨지','wedge')) return 'WH';
+  if(has('힐','heel','heels')) return 'HE';
+  if(has('구두')) return 'GD';
+  return '';
+}
+
+function applyDetectedGenItemFromInputs(){
+  const genItemEl = document.getElementById('gen-item');
+  if(!genItemEl) return '';
+  const texts = [
+    document.getElementById('inp-product-keyword')?.value || '',
+    document.getElementById('inp-name')?.value || '',
+    inferCategoryLabel(),
+    getInfoValueByKey('모델명') || ''
+  ].join(' ');
+  const detected = detectGenItemFromText(texts);
+  if(detected && genItemEl.value !== detected){
+    genItemEl.value = detected;
+    updateGenPreview();
+    if(typeof syncRegisterAutoFields === 'function') syncRegisterAutoFields();
+  }
+  return detected || String(genItemEl.value || '').toUpperCase();
 }
 
 function inferProductKeyword(){
@@ -2976,7 +3032,7 @@ function ensureHeroAndColorReady(){
   return true;
 }
 
-function generateStructuredProductText(){
+async function generateStructuredProductText(){
   if(!ensureHeroAndColorReady()) return;
 
   const stylePool = ['제니','리사','에이미','소피','클로이','엘라','리나','루시','줄리아','아이린','미아','벨라'];
@@ -2985,8 +3041,8 @@ function generateStructuredProductText(){
   const commentInp = document.getElementById('inp-comment');
 
   if(styleInp && !String(styleInp.value || '').trim()){
-    const idx = Math.floor(Math.random() * stylePool.length);
-    styleInp.value = stylePool[idx];
+    const picked = await pickAvailableStyleName(stylePool);
+    styleInp.value = picked || stylePool[Math.floor(Math.random() * stylePool.length)];
   }
   if(keywordInp && !String(keywordInp.value || '').trim()){
     keywordInp.value = inferProductKeyword();
@@ -3034,6 +3090,8 @@ function generateStructuredProductText(){
   buildPointsSidebar();
   updatePoints();
   syncProductNames();
+  applyDetectedGenItemFromInputs();
+  if(typeof triggerStyleNameDuplicateCheck === 'function') await triggerStyleNameDuplicateCheck(true);
 }
 
 function syncProductNames(){
@@ -6875,12 +6933,12 @@ function getSabangMyCategoryItemCode(){
   const itemMap = {
     FL:'FL',
     LF:'LF',
-    PU:'GD',
-    HE:'GD',
-    SB:'GD',
+    PU:'PU',
+    HE:'HE',
+    SB:'SB',
     SD:'SD',
     SP:'SP',
-    MU:'BF',
+    MU:'MU',
     BF:'BF',
     WK:'WK',
     BT:'BT',
@@ -6959,12 +7017,7 @@ function buildSabangRow(){
   const origin = cleanSabangText(normalizeSabangOrigin(getInfoValueByKey('제조국') || document.getElementById('reg-origin')?.value || '대한민국'), 50);
   const colorOptions = getColorOptionString();
   const sizeOptions = getSizeOptionString();
-  const normalizedStyle = styleName.replace(/\s+/g,' ').trim().toLowerCase();
-  const normalizedProduct = productName.replace(/\s+/g,' ').trim().toLowerCase();
-  const mergedProductName = (styleName && productName && !normalizedProduct.startsWith(normalizedStyle))
-    ? `${styleName} ${productName}`.trim()
-    : (productName || styleName);
-  const displayedName = cleanSabangText(itemCode ? `${mergedProductName} (${itemCode})` : mergedProductName, 255);
+  const displayedName = cleanSabangText(itemCode ? `${productName} (${itemCode})` : productName, 255);
   const buyerName = cleanSabangText(getBuyerName(), 60);
   const shortName = cleanSabangText(document.getElementById('reg-short-name')?.value || buyerName || productName, 60);
   const modelName = cleanSabangText(wholesaleName || productName, 60);
@@ -7832,17 +7885,9 @@ async function saveCurrentProductRecordToSupabase(uploaded){
   const subImages = uploaded && uploaded.detailUrl ? [uploaded.detailUrl] : [];
   const nowIso = new Date().toISOString();
 
-  const styleName = cleanSabangText(document.getElementById('inp-model-en')?.value || '', 60);
-  const normalizedStyle = styleName.replace(/\s+/g,' ').trim().toLowerCase();
-  const normalizedProduct = productName.replace(/\s+/g,' ').trim().toLowerCase();
-  const mergedProductName = (styleName && productName && !normalizedProduct.startsWith(normalizedStyle))
-    ? `${styleName} ${productName}`.trim()
-    : (productName || styleName);
-
   const payload = {
     item_code: itemCode,
-    product_name: mergedProductName,
-    style_name: styleName,
+    product_name: productName,
     brand: brand,
     price: price,
     main_image: uploaded?.mainUrl || '',
@@ -8057,6 +8102,14 @@ function init(){
     const el = document.getElementById(id);
     if(el) el.addEventListener('input', updateGenPreview);
   });
+  const styleNameEl = document.getElementById('inp-model-en');
+  if(styleNameEl){
+    styleNameEl.addEventListener('input', ()=>{ if(typeof triggerStyleNameDuplicateCheck === 'function') triggerStyleNameDuplicateCheck(false); syncGeneratedProductName(true); });
+  }
+  const keywordEl = document.getElementById('inp-product-keyword');
+  if(keywordEl){
+    keywordEl.addEventListener('input', ()=>{ applyDetectedGenItemFromInputs(); syncGeneratedProductName(true); });
+  }
   // 품번 중복체크 Supabase 연결 상태 초기화 (실제 Storage 호출로 확인)
   setItemCodeCheckerStatus('Supabase 연결 확인 중…', false);
   (async ()=>{
