@@ -7,7 +7,11 @@
 <title>상세페이지 스튜디오 v2 — JSON 자동생성</title>
 <link href="https://fonts.googleapis.com" rel="preconnect"/>
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;500;600&amp;family=Noto+Sans+KR:wght@300;400;500;700&amp;family=Playfair+Display:wght@400;700&amp;family=Bebas+Neue&amp;family=Black+Han+Sans&amp;display=swap" rel="stylesheet"/>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js">
+window.addEventListener('load', ()=>{ try{ renderHero(); }catch(e){} });
+window.addEventListener('resize', ()=>{ try{ applyHeroClipImg(); }catch(e){} });
+showZoomGuideOnce();
+</script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
 :root{
@@ -261,7 +265,71 @@ body{display:flex;flex-direction:column;height:100vh;font-family:'Noto Sans KR',
 
 /* PAGE STYLES */
 .pd-hero{position:relative;background:#fff;overflow:hidden;width:100%;max-width:1000px;}
-.pd-hero img.pd-hero-img{width:100%;max-width:1000px;height:auto;display:block;}
+.pd-hero-img-wrap{width:100%;aspect-ratio:1/1;overflow:hidden;position:relative;background:#ffffff;cursor:grab;user-select:none;touch-action:none;}
+.pd-hero-img-wrap:active{cursor:grabbing;}
+.pd-hero img.pd-hero-img{width:auto;height:auto;max-width:none;max-height:none;display:block;position:absolute;top:0;left:0;pointer-events:none;transform-origin:top center;will-change:transform;}
+.pd-hero .clip-controls{position:absolute;bottom:0;left:0;right:0;background:rgba(0,0,0,0.55);padding:6px 8px;display:flex;align-items:center;gap:8px;opacity:0;transition:opacity .2s;z-index:10;}
+.pd-hero:hover .clip-controls,.pd-hero-img-wrap:hover .clip-controls{opacity:1;}
+.pd-hero .clip-controls input[type=range]{flex:1;accent-color:#c8a96e;height:3px;}
+.pd-hero .clip-controls span{font-size:10px;color:#fff;white-space:nowrap;}
+.pd-hero .clip-controls button{background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.3);color:#fff;font-size:10px;padding:2px 7px;border-radius:3px;cursor:pointer;white-space:nowrap;}
+.pd-hero .clip-controls button:hover{background:rgba(255,255,255,0.3);}
+
+/* Zoom hint UX */
+.zoom-hint-wrap::before{
+  content:"Alt + 휠 확대";
+  position:absolute;
+  left:8px;
+  bottom:8px;
+  z-index:12;
+  font-size:10px;
+  line-height:1;
+  color:#fff;
+  background:rgba(0,0,0,0.42);
+  border:1px solid rgba(255,255,255,0.16);
+  border-radius:999px;
+  padding:5px 8px;
+  pointer-events:none;
+  opacity:.88;
+  transition:opacity .18s ease, transform .18s ease;
+  backdrop-filter: blur(2px);
+}
+.zoom-hint-wrap:hover::before{opacity:1;transform:translateY(-1px);}
+.zoom-hint-wrap.zoom-hint-used::before{opacity:0;}
+.zoom-guide-toast{
+  position:fixed;
+  left:50%;
+  bottom:22px;
+  transform:translateX(-50%);
+  z-index:99999;
+  background:rgba(26,26,26,.94);
+  color:#fff;
+  border:1px solid rgba(255,255,255,.1);
+  border-radius:12px;
+  box-shadow:0 10px 30px rgba(0,0,0,.22);
+  padding:12px 16px;
+  display:flex;
+  align-items:center;
+  gap:10px;
+  font-size:12px;
+  letter-spacing:.1px;
+}
+.zoom-guide-toast strong{font-weight:700;color:#fff;}
+.zoom-guide-kbd{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  min-width:28px;
+  height:22px;
+  padding:0 8px;
+  border-radius:7px;
+  background:#2c2c2c;
+  border:1px solid rgba(255,255,255,.14);
+  font-size:11px;
+  font-weight:700;
+}
+.zoom-guide-toast.hide{opacity:0;transform:translateX(-50%) translateY(8px);transition:all .25s ease;}
+
 .pd-hero-placeholder{display:flex;align-items:center;justify-content:center;flex-direction:column;gap:8px;color:#bbb;font-size:13px;cursor:pointer;width:100%;height:100%;}
 .pd-hero-logo{position:absolute;top:20px;right:20px;z-index:10;background:transparent;padding:0;pointer-events:none;}
 .pd-hero-logo img{width:300px;max-width:300px;height:auto;object-fit:contain;display:block;opacity:0.95;}
@@ -283,7 +351,7 @@ body{display:flex;flex-direction:column;height:100vh;font-family:'Noto Sans KR',
 
 .pd-colors{display:grid;grid-template-columns:repeat(2,1fr);gap:18px;}
 .pd-color-chip{display:flex;flex-direction:column;align-items:stretch;cursor:pointer;width:100%;}
-.pd-color-img-wrap{width:100%;aspect-ratio:1/1;background:#EFEFEF;overflow:hidden;position:relative;cursor:grab;user-select:none;}
+.pd-color-img-wrap{width:100%;aspect-ratio:1/1;background:#EFEFEF;overflow:hidden;position:relative;cursor:grab;user-select:none;touch-action:none;}
 .pd-color-img-wrap:active{cursor:grabbing;}
 .pd-color-img-wrap img{width:100%;height:100%;object-fit:cover;position:absolute;top:0;left:0;pointer-events:none;transform-origin:center center;will-change:transform;}
 .pd-color-img-wrap .clip-controls{position:absolute;bottom:0;left:0;right:0;background:rgba(0,0,0,0.55);padding:5px 7px;display:flex;align-items:center;gap:6px;opacity:0;transition:opacity .2s;z-index:10;}
@@ -328,7 +396,7 @@ body{display:flex;flex-direction:column;height:100vh;font-family:'Noto Sans KR',
 .pd-points{display:flex;flex-direction:column;gap:24px;}
 .pd-point{display:flex;flex-direction:row;gap:32px;align-items:center;}
 .pd-point-content{display:flex;flex-direction:column;justify-content:center;flex:1;min-width:0;}
-.pd-point-img-wrap{width:384px;aspect-ratio:1;flex-shrink:0;overflow:hidden;background:var(--light-gray);position:relative;cursor:grab;user-select:none;}
+.pd-point-img-wrap{width:384px;aspect-ratio:1;flex-shrink:0;overflow:hidden;background:var(--light-gray);position:relative;cursor:grab;user-select:none;touch-action:none;}
 .pd-point-img-wrap:active{cursor:grabbing;}
 .pd-point-img-wrap img{width:100%;height:100%;object-fit:cover;position:absolute;top:0;left:0;pointer-events:none;transform-origin:center center;will-change:transform;}
 .pd-point-img-wrap .clip-controls{position:absolute;bottom:0;left:0;right:0;background:rgba(0,0,0,0.55);padding:6px 8px;display:flex;align-items:center;gap:8px;opacity:0;transition:opacity .2s;z-index:10;}
@@ -1737,8 +1805,20 @@ body{display:flex;flex-direction:column;height:100vh;font-family:'Noto Sans KR',
 <div style="font-size:36px;">📷</div>
 <div>대표 이미지를 업로드하세요</div>
 </div>
+<div class="pd-hero-img-wrap" id="pd-hero-wrap" style="display:none;">
 <img alt="" class="pd-hero-img" id="pd-hero-img" src="" style="display:none;pointer-events:none;"/>
-<div id="pd-hero-img-overlay" onclick="triggerUpload('hero-upload')" style="display:none;position:absolute;inset:0;cursor:pointer;z-index:2;" title="클릭하여 이미지 교체"></div>
+<div class="clip-controls">
+<span>확대</span>
+<input id="hero-scale-slider" min="0.1" max="4" oninput="setHeroScale(parseFloat(this.value))" onmousedown="event.stopPropagation()" step="0.01" type="range" value="1"/>
+<span id="hero-scale-label">100%</span>
+<span style="margin-left:4px;">회전</span>
+<input id="hero-rot-slider" min="-180" max="180" oninput="setHeroRot(parseFloat(this.value))" onmousedown="event.stopPropagation()" step="1" type="range" value="0"/>
+<span id="hero-rot-label">0°</span>
+<button onclick="resetHeroTransform();event.stopPropagation()" type="button">리셋</button>
+<button onclick="triggerUpload('hero-upload');event.stopPropagation()" type="button">교체</button>
+</div>
+</div>
+<div id="pd-hero-img-overlay" style="display:none;position:absolute;inset:0;cursor:default;z-index:2;pointer-events:none;" title=""></div>
 <div class="pd-hero-logo"><img alt="브랜드 로고" id="logo-img" style="display:none;"/></div>
 </div>
 <!-- 제목 -->
@@ -2046,7 +2126,11 @@ const state = {
     { key:'제조사', val:'하루애', _locked:true },
     { key:'제조년월', val:'신발 또는 박스에 표기', _locked:true }
   ],
-  heroSrc: null
+  heroSrc: null,
+  heroX: 0,
+  heroY: 0,
+  heroScale: 1,
+  heroRot: 0
 };
 
 // ============================================================
@@ -2114,7 +2198,11 @@ function getDefaultProductState(){
       { key:'제조사', val:'하루애', _locked:true },
       { key:'제조년월', val:'신발 또는 박스에 표기', _locked:true }
     ],
-    heroSrc: null
+    heroSrc: null,
+    heroX: 0,
+    heroY: 0,
+    heroScale: 1,
+    heroRot: 0
   };
 }
 
@@ -2154,10 +2242,16 @@ function resetProductWorkspace(){
   state.points = JSON.parse(JSON.stringify(fresh.points));
   state.infoRows = JSON.parse(JSON.stringify(fresh.infoRows));
   state.heroSrc = null;
+  state.heroX = 0;
+  state.heroY = 0;
+  state.heroScale = 1;
+  state.heroRot = 0;
 
   const heroImg = document.getElementById('pd-hero-img');
   const heroPlaceholder = document.getElementById('pd-hero-placeholder');
+  const heroWrap = document.getElementById('pd-hero-wrap');
   if(heroImg){ heroImg.src = ''; heroImg.style.display='none'; }
+  if(heroWrap) heroWrap.style.display='none';
   if(heroPlaceholder) heroPlaceholder.style.display='flex';
   const heroOverlay = document.getElementById('pd-hero-img-overlay');
   if(heroOverlay) heroOverlay.innerHTML = '';
@@ -2499,6 +2593,20 @@ function setItemCodeCheckerStatus(msg, ok){
 // ============================================================
 // HERO IMAGE DOWNLOAD
 // ============================================================
+function drawTransformedImageCover(ctx, img, outW, outH, panX, panY, scale, rotDeg){
+  const iw = img.naturalWidth || img.width;
+  const ih = img.naturalHeight || img.height;
+  if(!iw || !ih) return;
+  const base = Math.max(outW / iw, outH / ih);
+  const finalScale = base * (typeof scale === 'number' ? scale : 1);
+  ctx.save();
+  ctx.translate(outW / 2 + (panX || 0), outH / 2 + (panY || 0));
+  ctx.rotate(((rotDeg || 0) * Math.PI) / 180);
+  ctx.scale(finalScale, finalScale);
+  ctx.drawImage(img, -iw / 2, -ih / 2, iw, ih);
+  ctx.restore();
+}
+
 function downloadHeroJPG(){
   if(!checkItemCode()) return;
   const src = String(state.heroSrc || document.getElementById('pd-hero-img')?.getAttribute('src') || '').trim();
@@ -2530,13 +2638,16 @@ function downloadHeroJPG(){
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(0, 0, OUT, OUT);
 
-    // cover 방식: 비율 유지하면서 1000×1000을 꽉 채우도록 스케일 후 중앙 크롭
-    const scale = Math.max(OUT / iw, OUT / ih);
-    const sw = Math.round(iw * scale);
-    const sh = Math.round(ih * scale);
-    const sx = Math.round((OUT - sw) / 2);
-    const sy = Math.round((OUT - sh) / 2);
-    ctx.drawImage(img, sx, sy, sw, sh);
+    drawTransformedImageContainTop(
+      ctx,
+      img,
+      OUT,
+      OUT,
+      state.heroX || 0,
+      state.heroY || 0,
+      typeof state.heroScale === 'number' ? state.heroScale : 1,
+      typeof state.heroRot === 'number' ? state.heroRot : 0
+    );
 
     const doDownload = async () => {
       const dataUrl = canvas.toDataURL('image/jpeg', 0.92);
@@ -3934,6 +4045,213 @@ function triggerUpload(id){
 // ============================================================
 // HERO UPLOAD
 // ============================================================
+function ensureHeroTransform(){
+  if(typeof state.heroX !== 'number') state.heroX = 0;
+  if(typeof state.heroY !== 'number') state.heroY = 0;
+  if(typeof state.heroScale !== 'number') state.heroScale = 1;
+  if(typeof state.heroRot !== 'number') state.heroRot = 0;
+}
+
+function applyHeroClipImg(){
+  ensureHeroTransform();
+  const wrap = document.getElementById('pd-hero-wrap');
+  const img = document.getElementById('pd-hero-img');
+  if(!wrap || !img || !img.naturalWidth || !img.naturalHeight) return;
+
+  const ww = wrap.clientWidth || wrap.offsetWidth || 1000;
+  const wh = wrap.clientHeight || wrap.offsetHeight || ww || 1000;
+  const iw = img.naturalWidth;
+  const ih = img.naturalHeight;
+  if(!ww || !wh || !iw || !ih) return;
+
+  const baseFit = Math.min(ww / iw, wh / ih);
+  const finalScale = baseFit * (typeof state.heroScale === 'number' ? state.heroScale : 1);
+  const drawW = iw * finalScale;
+  const drawH = ih * finalScale;
+  const x = ((ww - drawW) / 2) + (state.heroX || 0);
+  const y = (state.heroY || 0);
+
+  img.style.width = drawW + 'px';
+  img.style.height = drawH + 'px';
+  img.style.left = x + 'px';
+  img.style.top = y + 'px';
+  img.style.transform = `rotate(${state.heroRot || 0}deg)`;
+}
+
+function drawTransformedImageContainTop(ctx, img, outW, outH, panX, panY, scale, rotDeg){
+  const iw = img.naturalWidth || img.width;
+  const ih = img.naturalHeight || img.height;
+  if(!iw || !ih) return;
+
+  const base = Math.min(outW / iw, outH / ih);
+  const finalScale = base * (typeof scale === 'number' ? scale : 1);
+  const drawW = iw * finalScale;
+  const drawH = ih * finalScale;
+  const x = ((outW - drawW) / 2) + (panX || 0);
+  const y = (panY || 0);
+
+  ctx.save();
+  ctx.translate(x + drawW / 2, y + drawH / 2);
+  ctx.rotate(((rotDeg || 0) * Math.PI) / 180);
+  ctx.drawImage(img, -drawW / 2, -drawH / 2, drawW, drawH);
+  ctx.restore();
+}
+
+function renderHero(){
+  ensureHeroTransform();
+  const hero = document.getElementById('pd-hero');
+  const wrap = document.getElementById('pd-hero-wrap');
+  const img = document.getElementById('pd-hero-img');
+  const placeholder = document.getElementById('pd-hero-placeholder');
+  const overlay = document.getElementById('pd-hero-img-overlay');
+  if(!hero || !wrap || !img || !placeholder) return;
+
+  if(!state.heroSrc){
+    hero.style.minHeight = '300px';
+    wrap.style.display = 'none';
+    img.style.display = 'none';
+    img.src = '';
+    placeholder.style.display = 'flex';
+    if(overlay) overlay.style.display = 'none';
+    return;
+  }
+
+  hero.style.minHeight = '0';
+  placeholder.style.display = 'none';
+  wrap.style.display = 'block';
+  img.style.display = 'block';
+  const applyNow = () => applyHeroClipImg();
+  img.onload = applyNow;
+  if(img.src !== state.heroSrc) img.src = state.heroSrc;
+  if(img.complete && img.naturalWidth) applyNow();
+  if(overlay) overlay.style.display = 'none';
+
+  const scaleSlider = document.getElementById('hero-scale-slider');
+  const scaleLabel = document.getElementById('hero-scale-label');
+  const rotSlider = document.getElementById('hero-rot-slider');
+  const rotLabel = document.getElementById('hero-rot-label');
+  if(scaleSlider) scaleSlider.value = String(state.heroScale);
+  if(scaleLabel) scaleLabel.textContent = Math.round(state.heroScale * 100) + '%';
+  if(rotSlider) rotSlider.value = String(state.heroRot);
+  if(rotLabel) rotLabel.textContent = Math.round(state.heroRot) + '°';
+
+  bindHeroClipEvents();
+}
+
+
+function showZoomGuideOnce(){
+  try{
+    const key = 'harue_zoom_alt_wheel_guide_v1';
+    if(localStorage.getItem(key)) return;
+    const toast = document.createElement('div');
+    toast.className = 'zoom-guide-toast';
+    toast.innerHTML = '<span class="zoom-guide-kbd">Alt</span><strong>+</strong><span class="zoom-guide-kbd">휠</span><span>확대/축소 · 드래그 이동</span>';
+    document.body.appendChild(toast);
+    setTimeout(()=> toast.classList.add('hide'), 2600);
+    setTimeout(()=> toast.remove(), 2900);
+    localStorage.setItem(key, '1');
+  }catch(e){}
+}
+
+function bindWheelZoom(wrap, getState, onApply, opts){
+  if(!wrap) return;
+  const min = typeof opts?.min === 'number' ? opts.min : 0.1;
+  const max = typeof opts?.max === 'number' ? opts.max : 4;
+  const step = typeof opts?.step === 'number' ? opts.step : 0.05;
+  wrap.classList.add('zoom-hint-wrap');
+  wrap.title = 'Alt + 휠로 확대/축소 / 드래그 이동';
+  wrap.onwheel = e => {
+    if(e.target.closest('input') || e.target.closest('button')) return;
+    if(!e.altKey) return;
+    e.preventDefault();
+    const s = getState();
+    if(!s) return;
+    const delta = e.deltaY < 0 ? step : -step;
+    const next = Math.max(min, Math.min(max, (typeof s.imgScale === 'number' ? s.imgScale : 1) + delta));
+    wrap.classList.add('zoom-hint-used');
+    onApply(next);
+  };
+}
+
+function bindHeroClipEvents(){
+  const wrap = document.getElementById('pd-hero-wrap');
+  const img = document.getElementById('pd-hero-img');
+  if(!wrap || !img || !state.heroSrc) return;
+
+  let dragging = false, sx = 0, sy = 0, ox = 0, oy = 0;
+  wrap.onmousedown = e => {
+    if(e.button !== 0) return;
+    if(e.target.tagName === 'INPUT' || e.target.tagName === 'BUTTON') return;
+    dragging = true;
+    sx = e.clientX;
+    sy = e.clientY;
+    ox = state.heroX || 0;
+    oy = state.heroY || 0;
+    e.preventDefault();
+  };
+  wrap.onmousemove = e => {
+    if(!dragging) return;
+    state.heroX = ox + (e.clientX - sx);
+    state.heroY = oy + (e.clientY - sy);
+    applyHeroClipImg();
+  };
+  wrap.onmouseup = () => { dragging = false; };
+  wrap.onmouseleave = () => { dragging = false; };
+  wrap.ontouchstart = e => {
+    if(e.target.tagName === 'INPUT' || e.target.tagName === 'BUTTON') return;
+    dragging = true;
+    sx = e.touches[0].clientX;
+    sy = e.touches[0].clientY;
+    ox = state.heroX || 0;
+    oy = state.heroY || 0;
+  };
+  wrap.ontouchmove = e => {
+    if(!dragging) return;
+    state.heroX = ox + (e.touches[0].clientX - sx);
+    state.heroY = oy + (e.touches[0].clientY - sy);
+    applyHeroClipImg();
+    e.preventDefault();
+  };
+  wrap.ontouchend = () => { dragging = false; };
+  bindWheelZoom(wrap, () => state, val => setHeroScale(val), { min: 0.1, max: 4, step: 0.05 });
+}
+
+function setHeroScale(val){
+  ensureHeroTransform();
+  state.heroScale = Math.max(0.1, Math.min(4, val || 1));
+  const lbl = document.getElementById('hero-scale-label');
+  const slider = document.getElementById('hero-scale-slider');
+  applyHeroClipImg();
+  if(lbl) lbl.textContent = Math.round(state.heroScale * 100) + '%';
+  if(slider) slider.value = String(state.heroScale);
+}
+
+function setHeroRot(val){
+  ensureHeroTransform();
+  state.heroRot = Math.max(-180, Math.min(180, val || 0));
+  const lbl = document.getElementById('hero-rot-label');
+  const slider = document.getElementById('hero-rot-slider');
+  applyHeroClipImg();
+  if(lbl) lbl.textContent = Math.round(state.heroRot) + '°';
+  if(slider) slider.value = String(state.heroRot);
+}
+
+function resetHeroTransform(){
+  state.heroX = 0;
+  state.heroY = 0;
+  state.heroScale = 1;
+  state.heroRot = 0;
+  const scaleSlider = document.getElementById('hero-scale-slider');
+  const rotSlider = document.getElementById('hero-rot-slider');
+  const scaleLabel = document.getElementById('hero-scale-label');
+  const rotLabel = document.getElementById('hero-rot-label');
+  if(scaleSlider) scaleSlider.value = '1';
+  if(rotSlider) rotSlider.value = '0';
+  if(scaleLabel) scaleLabel.textContent = '100%';
+  if(rotLabel) rotLabel.textContent = '0°';
+  applyHeroClipImg();
+}
+
 function handleHeroUpload(e){
   const files=e.target.files;
   if(!files||!files.length) return;
@@ -3942,14 +4260,11 @@ function handleHeroUpload(e){
   reader.onload=function(ev){
     const src=ev.target.result;
     state.heroSrc=src;
-    document.getElementById('pd-hero-placeholder').style.display='none';
-    const hero=document.getElementById('pd-hero');
-    hero.style.minHeight='0';
-    const img=document.getElementById('pd-hero-img');
-    img.src=src;
-    img.style.display='block';
-    img.style.position='relative';
-    document.getElementById('pd-hero-img-overlay').style.display='block';
+    state.heroX=0;
+    state.heroY=0;
+    state.heroScale=1;
+    state.heroRot=0;
+    renderHero();
 
     // 코멘트가 비어있으면 자동 생성(이미지 업로드 시점)
     ensureAutoComment();
@@ -4533,7 +4848,7 @@ function updateGallery(){
     const ctrlGap = isGrid ? 6 : 8;
     const fontSize = isGrid ? 9 : 10;
     return `<div style="position:relative;line-height:0;">
-      <div id="gal-wrap-${idx}" style="width:100%;aspect-ratio:${aspect};overflow:hidden;position:relative;background:${bg};cursor:grab;user-select:none;${heightStyle}">
+      <div id="gal-wrap-${idx}" style="width:100%;aspect-ratio:${aspect};overflow:hidden;position:relative;background:${bg};cursor:grab;user-select:none;touch-action:none;${heightStyle}">
         <img class="pd-gallery-img" src="${g.src}" id="gal-img-${idx}" alt="" style="width:100%;height:100%;object-fit:${fit};object-position:${position};position:absolute;top:0;left:0;pointer-events:none;transform-origin:center center;will-change:transform;transform:${imgTransform(g.imgX,g.imgY,g.imgScale,g.imgRot)};">
         <div class="gal-clip-controls" style="position:absolute;left:0;right:0;bottom:0;background:rgba(0,0,0,.55);padding:${ctrlPad};display:flex;align-items:center;gap:${ctrlGap}px;opacity:0;transition:opacity .2s;z-index:5;pointer-events:none;">
           <span style="font-size:${fontSize}px;color:#fff;white-space:nowrap;">확대</span>
@@ -4683,6 +4998,7 @@ function bindGalleryClipEvents(){
       applyClipImg(img, wrap, g.imgX, g.imgY, g.imgScale, g.imgRot);
     };
     wrap.ontouchend = ()=>{ dragging=false; };
+    bindWheelZoom(wrap, () => g, val => setGalleryScale(i, val), { min:0.1, max:4, step:0.05 });
   });
 }
 function setGalleryScale(i, val){
@@ -4998,6 +5314,7 @@ function updateColors(){
       applyClipImg(img,wrap,c.imgX,c.imgY,c.imgScale,c.imgRot);
     },{passive:true});
     wrap.addEventListener('touchend', ()=>{ dragging=false; });
+    bindWheelZoom(wrap, () => c, val => setColorScale(i, val), { min:0.1, max:4, step:0.05 });
   });
   syncColorInfoRow();
   // 스타일 재적용
@@ -5032,14 +5349,11 @@ function selectColor(i){
   if(next) next.style.boxShadow = '0 0 0 2px #C9A96E';
   if(c.imgSrc){
     state.heroSrc = c.imgSrc;
-    const hero = document.getElementById('pd-hero');
-    hero.style.minHeight = '0';
-    document.getElementById('pd-hero-placeholder').style.display = 'none';
-    const img = document.getElementById('pd-hero-img');
-    img.src = c.imgSrc;
-    img.style.display = 'block';
-    img.style.position = 'relative';
-    document.getElementById('pd-hero-img-overlay').style.display = 'block';
+    state.heroX = 0;
+    state.heroY = 0;
+    state.heroScale = 1;
+    state.heroRot = 0;
+    renderHero();
   }
 
 }
@@ -5412,6 +5726,7 @@ function updatePoints(){
       applyClipImg(img,wrap,p.imgX,p.imgY,p.imgScale,p.imgRot);
     },{passive:true});
     wrap.addEventListener('touchend', ()=>{ dragging=false; });
+    bindWheelZoom(wrap, () => p, val => setPointScale(i, val), { min:0.1, max:4, step:0.05 });
   });
 
   // 스타일 재적용
