@@ -8252,8 +8252,7 @@ ${_itemCodeCheck.lastMsg || ''}`);
     showToast(`JPG 생성 완료 · 대표 ${bytesToSize(mainBlob.size)} / 상세 ${bytesToSize(detailBlob.size)}`);
   }catch(err){
     console.error(err);
-    alert('JPG 미리생성 중 오류가 발생했습니다.
-' + (err.message || err));
+    alert('JPG 미리생성 중 오류가 발생했습니다.\n' + (err.message || err));
   }finally{
     if(btn){ btn.disabled = false; btn.textContent = oldText || '🖼 JPG 미리생성'; }
   }
