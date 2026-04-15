@@ -8265,6 +8265,109 @@ async function saveCurrentProductRecordToSupabase(uploaded){
   return payload;
 }
 
+
+const DETAIL_API_BASE = 'https://nas.haruepick.com';
+
+function getDetailFolderName(){
+  const itemCode = (document.getElementById('inp-item-code')?.value || '').trim();
+  if(!itemCode) throw new Error('품번이 없습니다.');
+  return itemCode;
+}
+
+function blobToBase64(blob){
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const s = String(reader.result || '');
+      const base64 = s.includes(',') ? s.split(',')[1] : s;
+      resolve(base64);
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+}
+
+async function saveDetailDraftToNas(){
+  const folderName = getDetailFolderName();
+  const snapshot =
+    typeof collectStudioSnapshot === 'function'
+      ? collectStudioSnapshot()
+      : {};
+
+  const res = await fetch(`${DETAIL_API_BASE}/detail/save-draft`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      folder_name: folderName,
+      draft: snapshot
+    })
+  });
+
+  const data = await res.json();
+  if(!data.ok) throw new Error(data.error || '상세 draft NAS 저장 실패');
+  return data;
+}
+
+async function loadDetailDraftFromNas(folderName){
+  const targetFolder = (folderName || getDetailFolderName()).trim();
+  const res = await fetch(
+    `${DETAIL_API_BASE}/detail/load-draft?folder_name=${encodeURIComponent(targetFolder)}`
+  );
+
+  const data = await res.json();
+  if(!data.ok) throw new Error(data.error || '상세 draft NAS 불러오기 실패');
+
+  if(typeof applyStudioSnapshot === 'function' && data.draft){
+    applyStudioSnapshot(data.draft);
+  }
+
+  return data;
+}
+
+async function saveDetailMasterToNas(){
+  const folderName = getDetailFolderName();
+
+  let builtReady = true;
+  try{
+    ensureBuiltAssetsReady();
+  }catch(e){
+    builtReady = false;
+  }
+
+  if(!builtReady){
+    await buildJpgPreviewAssets();
+  }
+
+  const built = ensureBuiltAssetsReady();
+
+  const detailHtml =
+    typeof generateSmartStoreHTML === 'function'
+      ? generateSmartStoreHTML()
+      : '';
+
+  if(!detailHtml) throw new Error('detail HTML 생성 실패');
+
+  const mainBase64 = await blobToBase64(built.main.blob);
+  const detailBase64 = await blobToBase64(built.detail.blob);
+
+  const res = await fetch(`${DETAIL_API_BASE}/detail/save-master`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      folder_name: folderName,
+      html: detailHtml,
+      main_jpg_base64: mainBase64,
+      detail_jpg_base64: detailBase64,
+      main_filename: built.main.filename,
+      detail_filename: built.detail.filename
+    })
+  });
+
+  const data = await res.json();
+  if(!data.ok) throw new Error(data.error || '상세 master NAS 저장 실패');
+  return data;
+}
+
 async function confirmAndUploadProduct(){
   if(!checkItemCode()) return;
   if(_itemCodeCheck && _itemCodeCheck.ok === false){
@@ -8279,7 +8382,6 @@ async function confirmAndUploadProduct(){
     if(!getImageBaseUrl()) throw new Error('이미지 Public Base URL을 확인해주세요.');
     if(!getSupabaseAnonKey()) throw new Error('Supabase anon key를 확인해주세요.');
 
-    // JPG 미리생성이 안 되어 있으면 자동 생성
     let builtReady = true;
     try{ ensureBuiltAssetsReady(); }catch(e){ builtReady = false; }
     if(!builtReady){
@@ -8288,9 +8390,12 @@ async function confirmAndUploadProduct(){
 
     const built = ensureBuiltAssetsReady();
     const ok = confirm(
-      `수정확정 후 Supabase에 업로드합니다.\n\n대표: ${built.main.filename} (${bytesToSize(built.main.size)})\n상세: ${built.detail.filename} (${bytesToSize(built.detail.size)})\n\n계속 진행할까요?`
+      `수정확정 후 NAS 저장 + Supabase 업로드를 진행합니다.\n\n대표: ${built.main.filename} (${bytesToSize(built.main.size)})\n상세: ${built.detail.filename} (${bytesToSize(built.detail.size)})\n\n계속 진행할까요?`
     );
     if(!ok) return;
+
+    await saveDetailDraftToNas();
+    await saveDetailMasterToNas();
 
     const uploaded = await uploadCurrentProductImagesToSupabase();
     await saveCurrentProductRecordToSupabase(uploaded);
@@ -8308,8 +8413,8 @@ async function confirmAndUploadProduct(){
     }catch(e){}
 
     updateConfirmUi();
-    showToast('✅ 수정확정 완료 · Supabase 업로드 + products 저장 완료');
-    alert('수정확정, Supabase 업로드, products 테이블 저장이 완료되었습니다.\n이제 사방넷 등록파일 생성이 가능합니다.');
+    showToast('✅ 수정확정 완료 · NAS 저장 + Supabase 업로드 + products 저장 완료');
+    alert('수정확정 완료\n- NAS 저장 완료\n- Supabase 업로드 완료\n- products 저장 완료\n이제 사방넷 등록파일 생성이 가능합니다.');
 
   }catch(err){
     console.error(err);
