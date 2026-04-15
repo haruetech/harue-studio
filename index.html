@@ -8460,16 +8460,11 @@ ${_itemCodeCheck.lastMsg || ''}`);
 
     updateConfirmUi();
     showToast('✅ 수정확정 완료 · NAS 저장 + Supabase 업로드 + products 저장 완료');
-    alert('수정확정 완료
-- NAS 저장 완료
-- Supabase 업로드 완료
-- products 저장 완료
-이제 사방넷 등록파일 생성이 가능합니다.');
+    alert('수정확정 완료\n- NAS 저장 완료\n- Supabase 업로드 완료\n- products 저장 완료\n이제 사방넷 등록파일 생성이 가능합니다.');
 
   }catch(err){
     console.error(err);
-    alert('수정확정 처리 중 오류가 발생했습니다.
-' + (err.message || err));
+    alert('수정확정 처리 중 오류가 발생했습니다.\n' + (err.message || err));
   }finally{
     if(btn){ btn.disabled = false; btn.textContent = oldText || '✅ 수정확정'; }
     updateConfirmUi();
