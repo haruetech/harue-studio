@@ -290,12 +290,13 @@ body{display:flex;flex-direction:column;height:100vh;font-family:'Noto Sans KR',
   border-radius:999px;
   padding:5px 8px;
   pointer-events:none;
-  opacity:.88;
+  opacity:0;
+  transform:translateY(2px);
   transition:opacity .18s ease, transform .18s ease;
   backdrop-filter: blur(2px);
 }
-.zoom-hint-wrap:hover::before{opacity:1;transform:translateY(-1px);}
-.zoom-hint-wrap.zoom-hint-used::before{opacity:0;}
+.zoom-hint-wrap:hover::before{opacity:.88;transform:translateY(-1px);}
+.zoom-hint-wrap.zoom-hint-used::before{opacity:0 !important; content:none !important;}
 .zoom-guide-toast{
   position:fixed;
   left:50%;
@@ -560,31 +561,6 @@ body{display:flex;flex-direction:column;height:100vh;font-family:'Noto Sans KR',
   display:none;
 }
 .login-error.show{display:block;}
-
-
-
-/* JPG export clean mode */
-body.exporting-jpg .topbar,
-body.exporting-jpg .sidebar,
-body.exporting-jpg .preview-toolbar,
-body.exporting-jpg .preview-popup-btn,
-body.exporting-jpg .clip-controls,
-body.exporting-jpg .zoom-guide-toast,
-body.exporting-jpg .img-del-btn,
-body.exporting-jpg .clip-upload-btn,
-body.exporting-jpg .gal-del-btn-smart,
-body.exporting-jpg .img-preview-btn {
-  display: none !important;
-}
-
-body.exporting-jpg .zoom-hint-wrap::before {
-  display: none !important;
-  content: none !important;
-}
-
-body.exporting-jpg {
-  background: #ffffff !important;
-}
 
 </style>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -7680,32 +7656,7 @@ async function saveHTML(){
   const embedded = `\n<template id="studio-snapshot-data">${encoded}</template>\n`;
 
   // 저장된 HTML에서 product-page 가로를 1000px 고정
-  const fixedWidthStyle = `\n<style id="saved-width-fix">\n#product-page{width:1000px!important;min-width:1000px!important;max-width:1000px!important;}\n
-
-/* JPG export clean mode */
-body.exporting-jpg .topbar,
-body.exporting-jpg .sidebar,
-body.exporting-jpg .preview-toolbar,
-body.exporting-jpg .preview-popup-btn,
-body.exporting-jpg .clip-controls,
-body.exporting-jpg .zoom-guide-toast,
-body.exporting-jpg .img-del-btn,
-body.exporting-jpg .clip-upload-btn,
-body.exporting-jpg .gal-del-btn-smart,
-body.exporting-jpg .img-preview-btn {
-  display: none !important;
-}
-
-body.exporting-jpg .zoom-hint-wrap::before {
-  display: none !important;
-  content: none !important;
-}
-
-body.exporting-jpg {
-  background: #ffffff !important;
-}
-
-</style>\n`;
+  const fixedWidthStyle = `\n<style id="saved-width-fix">\n#product-page{width:1000px!important;min-width:1000px!important;max-width:1000px!important;}\n</style>\n`;
 
   if(html.includes('</body>')) html = html.replace('</body>', fixedWidthStyle + embedded + '</body>');
   else html += fixedWidthStyle + embedded;
@@ -7974,105 +7925,6 @@ async function blobFromDataUrlOrUrl(src){
   if(!res.ok) throw new Error('이미지를 불러오지 못했습니다: ' + s);
   return await res.blob();
 }
-
-function beginExportMode(){
-  document.body.classList.add('exporting-jpg');
-}
-
-function endExportMode(){
-  document.body.classList.remove('exporting-jpg');
-}
-
-async function runWithExportMode(fn){
-  beginExportMode();
-  try{
-    await new Promise(resolve => setTimeout(resolve, 80));
-    return await fn();
-  } finally {
-    endExportMode();
-  }
-}
-
-function getDetailFolderName(){
-  const itemCode = (document.getElementById('inp-item-code')?.value || '').trim();
-  if(!itemCode) throw new Error('품번이 없습니다.');
-  return itemCode;
-}
-
-function collectDetailDraftPayload(){
-  if(typeof collectStudioSnapshot === 'function'){
-    return collectStudioSnapshot();
-  }
-  return {
-    item_code: document.getElementById('inp-item-code')?.value || '',
-    brand: document.getElementById('inp-brand')?.value || '',
-    name: document.getElementById('inp-name')?.value || '',
-    price: document.getElementById('inp-price')?.value || '',
-    state: window.state || {}
-  };
-}
-
-async function blobToBase64(blob){
-  return await new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      const s = String(reader.result || '');
-      resolve(s.includes(',') ? s.split(',')[1] : s);
-    };
-    reader.onerror = reject;
-    reader.readAsDataURL(blob);
-  });
-}
-
-async function saveDetailDraftToNas(){
-  const folderName = getDetailFolderName();
-  const payload = collectDetailDraftPayload();
-
-  const res = await fetch('/api/detail/save-draft', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      folder_name: folderName,
-      draft: payload
-    })
-  });
-
-  const data = await res.json().catch(() => ({}));
-  if(!res.ok || !data.ok) throw new Error(data.error || '상세 draft NAS 저장 실패');
-  return data;
-}
-
-async function saveDetailMasterToNas(){
-  const folderName = getDetailFolderName();
-  const built = ensureBuiltAssetsReady();
-
-  const detailHtml =
-    typeof generateSmartStoreHTML === 'function'
-      ? generateSmartStoreHTML()
-      : (typeof buildSabangDetailHTML === 'function' ? buildSabangDetailHTML() : '');
-
-  const mainBase64 = await blobToBase64(built.main.blob);
-  const detailBase64 = await blobToBase64(built.detail.blob);
-
-  const res = await fetch('/api/detail/save-master', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      folder_name: folderName,
-      html: detailHtml,
-      main_jpg_base64: mainBase64,
-      detail_jpg_base64: detailBase64,
-      main_filename: built.main.filename,
-      detail_filename: built.detail.filename
-    })
-  });
-
-  const data = await res.json().catch(() => ({}));
-  if(!res.ok || !data.ok) throw new Error(data.error || '상세 master NAS 저장 실패');
-  return data;
-}
-
-
 async function buildMainImageJpegBlob(){
   const src = String(state.heroSrc || document.getElementById('pd-hero-img')?.getAttribute('src') || '').trim();
   if(!src) throw new Error('대표 이미지가 없습니다. 먼저 대표 이미지를 넣어주세요.');
@@ -8137,7 +7989,7 @@ async function buildDetailFullJpegBlob(){
   const exportStyle = document.createElement('style');
   exportStyle.textContent = `
     .zoom-guide-toast { display:none !important; }
-    .zoom-hint-wrap::before { display:none !important; content:none !important; }
+    .zoom-hint-wrap::before { display:none !important; content:none !important; opacity:0 !important; }
     .clip-controls { display:none !important; }
     .clip-upload-btn { display:none !important; }
     .img-del-btn { display:none !important; }
@@ -8160,6 +8012,7 @@ async function buildDetailFullJpegBlob(){
     '.pd-color-spoid-btn',
     '.pd-color-del-btn',
     '.img-del-btn',
+    '.zoom-guide-toast',
     '.preview-popup-btn'
   ].forEach(sel => {
     clonePage.querySelectorAll(sel).forEach(el => el.remove());
@@ -8242,22 +8095,15 @@ function ensureBuiltAssetsReady(){
 async function buildJpgPreviewAssets(){
   if(!checkItemCode()) return;
   if(_itemCodeCheck && _itemCodeCheck.ok === false){
-    alert(`품번 중복으로 출력이 차단되었습니다.
-
-${_itemCodeCheck.lastMsg || ''}`);
+    alert(`품번 중복으로 출력이 차단되었습니다.\n\n${_itemCodeCheck.lastMsg || ''}`);
     return;
   }
   const btn = document.getElementById('btn-build-jpg-preview');
   const oldText = btn ? btn.textContent : '';
   try{
     if(btn){ btn.disabled = true; btn.textContent = '생성 중...'; }
-
-    const { mainBlob, detailBlob } = await runWithExportMode(async () => {
-      const mainBlob = await buildMainImageJpegBlob();
-      const detailBlob = await buildDetailFullJpegBlob();
-      return { mainBlob, detailBlob };
-    });
-
+    const mainBlob = await buildMainImageJpegBlob();
+    const detailBlob = await buildDetailFullJpegBlob();
     window.__builtJpgAssets.itemCode = getCurrentItemCode();
     window.__builtJpgAssets.brandSlug = getBrandFolderSlug();
     setJpgPreviewImage('main', mainBlob);
@@ -8422,9 +8268,7 @@ async function saveCurrentProductRecordToSupabase(uploaded){
 async function confirmAndUploadProduct(){
   if(!checkItemCode()) return;
   if(_itemCodeCheck && _itemCodeCheck.ok === false){
-    alert(`품번 중복으로 출력이 차단되었습니다.
-
-${_itemCodeCheck.lastMsg || ''}`);
+    alert(`품번 중복으로 출력이 차단되었습니다.\n\n${_itemCodeCheck.lastMsg || ''}`);
     return;
   }
   const btn = document.getElementById('btn-confirm-upload');
@@ -8435,6 +8279,7 @@ ${_itemCodeCheck.lastMsg || ''}`);
     if(!getImageBaseUrl()) throw new Error('이미지 Public Base URL을 확인해주세요.');
     if(!getSupabaseAnonKey()) throw new Error('Supabase anon key를 확인해주세요.');
 
+    // JPG 미리생성이 안 되어 있으면 자동 생성
     let builtReady = true;
     try{ ensureBuiltAssetsReady(); }catch(e){ builtReady = false; }
     if(!builtReady){
@@ -8443,17 +8288,9 @@ ${_itemCodeCheck.lastMsg || ''}`);
 
     const built = ensureBuiltAssetsReady();
     const ok = confirm(
-      `수정확정 후 NAS + Supabase에 저장합니다.
-
-대표: ${built.main.filename} (${bytesToSize(built.main.size)})
-상세: ${built.detail.filename} (${bytesToSize(built.detail.size)})
-
-계속 진행할까요?`
+      `수정확정 후 Supabase에 업로드합니다.\n\n대표: ${built.main.filename} (${bytesToSize(built.main.size)})\n상세: ${built.detail.filename} (${bytesToSize(built.detail.size)})\n\n계속 진행할까요?`
     );
     if(!ok) return;
-
-    await saveDetailDraftToNas();
-    await saveDetailMasterToNas();
 
     const uploaded = await uploadCurrentProductImagesToSupabase();
     await saveCurrentProductRecordToSupabase(uploaded);
@@ -8471,8 +8308,8 @@ ${_itemCodeCheck.lastMsg || ''}`);
     }catch(e){}
 
     updateConfirmUi();
-    showToast('✅ 수정확정 완료 · NAS 저장 + Supabase 업로드 + products 저장 완료');
-    alert('수정확정 완료\n- NAS 저장 완료\n- Supabase 업로드 완료\n- products 저장 완료\n이제 사방넷 등록파일 생성이 가능합니다.');
+    showToast('✅ 수정확정 완료 · Supabase 업로드 + products 저장 완료');
+    alert('수정확정, Supabase 업로드, products 테이블 저장이 완료되었습니다.\n이제 사방넷 등록파일 생성이 가능합니다.');
 
   }catch(err){
     console.error(err);
