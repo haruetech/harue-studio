@@ -8133,6 +8133,19 @@ async function buildDetailFullJpegBlob(){
   clonePage.style.minWidth = '1000px';
   clonePage.style.boxShadow = 'none';
   clonePage.style.margin = '0 auto';
+
+  const exportStyle = document.createElement('style');
+  exportStyle.textContent = `
+    .zoom-guide-toast { display:none !important; }
+    .zoom-hint-wrap::before { display:none !important; content:none !important; }
+    .clip-controls { display:none !important; }
+    .clip-upload-btn { display:none !important; }
+    .img-del-btn { display:none !important; }
+    .pd-color-spoid-btn { display:none !important; }
+    .pd-color-del-btn { display:none !important; }
+  `;
+  clonePage.appendChild(exportStyle);
+
   cloneWrap.appendChild(clonePage);
   document.body.appendChild(cloneWrap);
 
