@@ -952,9 +952,8 @@ body{display:flex;flex-direction:column;height:100vh;font-family:'Noto Sans KR',
 </div>
 <div class="topbar-group">
 <span class="topbar-group-label">불러오기</span>
-<button class="topbar-btn" onclick="document.getElementById('import-html-input').click()" title="저장한 편집용 HTML 다시 열기">📂 작업 HTML 열기</button>
 <input accept=".html,text/html" id="import-html-input" onchange="importStudioHTML(event)" style="display:none;" type="file"/>
-<button class="topbar-btn" onclick="document.getElementById('import-settings-input').click()" title="저장된 JSON 설정 불러오기">⬆ 설정 불러오기</button>
+<button class="topbar-btn" onclick="document.getElementById('import-html-input').click()" title="저장한 편집용 HTML 불러오기">📂 HTML 불러오기</button>
 <input accept=".json" id="import-settings-input" onchange="importSettings(event)" style="display:none;" type="file"/>
 </div>
 <div class="topbar-group">
@@ -986,8 +985,22 @@ body{display:flex;flex-direction:column;height:100vh;font-family:'Noto Sans KR',
 <div class="sidebar-tab" onclick="switchTab('register')">상품등록<span class="tab-sub">사방넷</span></div>
 <div class="sidebar-tab" onclick="switchTab('style')">스타일<span class="tab-sub">텍스트크기</span></div>
 <div class="sidebar-tab" onclick="switchTab('layout')">레이아웃</div>
+<div class="sidebar-tab" onclick="switchTab('work-load');nasModalInit()">NAS<span class="tab-sub">불러오기</span></div>
 </div>
 <div class="sidebar-body">
+<!-- NAS 불러오기 TAB -->
+<div class="tab-panel" id="tab-work-load" style="padding:12px;">
+  <div style="font-size:13px;font-weight:900;color:#1a4a8a;margin-bottom:4px;">☁ NAS 작업 불러오기</div>
+  <div style="font-size:11px;color:#888;margin-bottom:10px;line-height:1.6;">품번 클릭 → studio 복원<br>work 폴더: 이미지+TXT+상품정보 자동입력</div>
+  <div style="display:flex;gap:6px;margin-bottom:8px;">
+    <button onclick="nasModalLoadDetailList()" id="nas-btn-detail" style="flex:1;padding:6px 0;border:2px solid #1a4a8a;background:#1a4a8a;color:#fff;border-radius:6px;font-size:11px;font-weight:800;cursor:pointer;">📁 detail</button>
+    <button onclick="nasModalLoadWorkList()" id="nas-btn-work2" style="flex:1;padding:6px 0;border:2px solid #ddd;background:#fff;color:#888;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer;">🔧 work</button>
+  </div>
+  <div id="nas-modal-list" style="max-height:320px;overflow-y:auto;border:1.5px solid #e0e8f0;border-radius:8px;background:#fff;"></div>
+  <div id="nas-modal-preview" style="display:none;margin-top:8px;background:#f0f5ff;border:1px solid #c0d0f0;border-radius:8px;padding:10px;font-size:11px;line-height:1.8;color:#333;"></div>
+  <button id="nas-modal-apply-btn" onclick="nasModalApply()" style="display:none;width:100%;height:40px;background:#1a4a8a;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:900;cursor:pointer;margin-top:8px;">✅ 이 작업 불러오기</button>
+  <div id="nas-modal-status" style="display:none;margin-top:8px;font-size:11px;font-weight:700;padding:8px;border-radius:6px;"></div>
+</div>
 <!-- CONTENT TAB -->
 <div class="tab-panel active" id="tab-content">
 <!-- 대표 이미지 (항상 열림) -->
@@ -1511,7 +1524,11 @@ body{display:flex;flex-direction:column;height:100vh;font-family:'Noto Sans KR',
   </div>
 </div>
 <div style="display:flex;gap:8px;">
-  <button class="topbar-btn sabang-btn" id="btn-upload-export" onclick="confirmUploadAndExportSabangExcel()" style="flex:1;">☁ 확인 후 업로드 + 등록파일 생성</button>
+  <div id="sabang-confirm-notice" style="display:none;background:#fffbe6;border:1.5px solid #f0c040;border-radius:8px;padding:10px;margin-bottom:8px;font-size:11px;color:#7a5c00;line-height:1.8;">
+  ✅ <b>수정확정 완료</b> — 아래 항목 확인 후 저장하세요<br>
+  · 원가 / 판매가 / TAG가 · 도매상품명 · 물류처 · 색상 / 사이즈
+</div>
+<button class="topbar-btn sabang-btn" id="btn-upload-export" onclick="confirmUploadAndExportSabangExcel()" style="flex:1;font-size:13px;font-weight:900;">☁ NAS 저장 + 등록파일 생성</button>
 </div>
 </div>
 </div>
@@ -3214,8 +3231,8 @@ function syncProductNames(){
   if(enEl){ enEl.textContent = en; enEl.style.display = en ? '' : 'none'; }
   if(krEl) krEl.textContent = kr;
   // 잡지 커버 자동 반영
-  const coverName = document.getElementById('inp-cover-name');
-  if(coverName && !coverName._manualEdit) coverName.value = en;
+  // cover-name은 자동 동기 안 함 (스타일명 중복 방지)
+  // 사용자가 직접 스타일 탭에서 입력
   const coverProd = document.getElementById('inp-cover-prod');
   if(coverProd && !coverProd._manualEdit) coverProd.value = kr;
   syncModelNameFull();
@@ -3256,11 +3273,7 @@ function getAutoProductInfoModelName(){
   let mainLabel = productName || styleName;
 
   if(styleName && productName){
-    const normStyle = styleName.replace(/\s+/g,' ').trim().toLowerCase();
-    const normProduct = productName.replace(/\s+/g,' ').trim().toLowerCase();
-    if(!normProduct.startsWith(normStyle)){
-      mainLabel = `${styleName} ${productName}`.trim();
-    }
+    mainLabel = productName; // 상품명만 사용 (스타일명 중복 방지)
   }
 
   return cleanSabangText(itemCode ? `${mainLabel} (${itemCode})` : mainLabel, 60);
@@ -4317,10 +4330,13 @@ async function autoFillFromImage(dataUrl){
 
 [3단계] 감성 코멘트 2줄 (한국어, 줄바꿈 \\n)
 
+[4단계] 아이템 코드 선택 (FL=플랫, LF=로퍼, PU=펌프스, HE=힐, SB=슬링백, SD=샌들, SP=슬리퍼, MU=뮬, BF=블로퍼, WK=워커, BT=부츠, SN=스니커즈, WH=웨지힐)
+
 {
   "model_en": "선택한 이름 (한글)",
   "name_kr": "신발 특성 기반 상품명 (이름 제외)",
-  "comment": "감성 코멘트 2줄"
+  "comment": "감성 코멘트 2줄",
+  "item_code": "아이템 코드 (예: PU)"
 }`
             }
           ]
@@ -4333,18 +4349,28 @@ async function autoFillFromImage(dataUrl){
     const clean = text.replace(/```json|```/g, '').trim();
     const result = JSON.parse(clean);
 
-    // 영문명 입력
+    // 스타일명(영어상품명) 입력
     if(result.model_en){
       const enInp = document.getElementById('inp-model-en');
       if(enInp){ enInp.value = result.model_en; }
     }
-    // 상품명 입력
+    // 상품명 입력 (스타일명과 분리)
     if(result.name_kr){
       const nameInp = document.getElementById('inp-name');
       if(nameInp){ nameInp.value = result.name_kr; }
       syncModelNameFromProduct(result.name_kr);
     }
     syncProductNames();
+
+    // 아이템 자동 설정 (gen-item 선택)
+    if(result.item_code){
+      const genItem = document.getElementById('gen-item');
+      if(genItem){
+        const opts = Array.from(genItem.options);
+        const match = opts.find(o => o.value === result.item_code);
+        if(match){ genItem.value = result.item_code; updateGenPreview(); }
+      }
+    }
 
     // 코멘트 입력
     if(result.comment){
@@ -7399,8 +7425,8 @@ function buildSabangRow(){
   return row;
 }
 async function exportSabangnetExcel(){
-  if(!(window.__productConfirmState && window.__productConfirmState.confirmed && window.__productConfirmState.uploaded)){
-    alert('먼저 "수정확정"을 눌러 Supabase 업로드를 완료해주세요.');
+  if(!(window.__productConfirmState && window.__productConfirmState.confirmed)){
+    alert('먼저 "수정확정"을 눌러 NAS 저장을 완료해주세요.');
     return;
   }
   if(!checkItemCode()) return;
@@ -7431,24 +7457,33 @@ async function exportSabangnetExcel(){
     // 항상 Blob으로 생성 → saveFilePicker로 위치 선택
     const wbout = XLSX.write(wb, { bookType:'xlsx', type:'array', compression:true });
     const blob = new Blob([wbout], { type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-    const result = await saveFilePicker(blob, filename, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-    if(!result) return; // 사용자 취소
-    const usedBlobFallback = false;
-    const hasLocalImages = !!(String(state.heroSrc || '').match(/^(data:|blob:)/i) || (state.gallery || []).some(g => String(g.src || '').match(/^(data:|blob:)/i)));
-    const detailWasTrimmed = String(buildSabangDetailHTML() || '').includes('SABANG_TRUNCATED');
-    if(hasLocalImages && detailWasTrimmed){
-      showToast('📊 등록파일 저장 완료 · 로컬이미지 제외 / 상세HTML 길이 자동조정');
-      setTimeout(() => alert('등록파일은 저장되었습니다.\n다만 로컬 업로드 이미지(data/blob)는 사방넷용 이미지 URL로 넣을 수 없어 비워졌고, 상세설명 HTML 길이가 길어 자동 축약되었습니다.\n이미지를 실제 등록하려면 http(s) 이미지 URL로 바꿔 넣어주세요.'), 120);
-    }else if(hasLocalImages){
-      showToast('📊 등록파일 저장 완료 · 이미지 URL 칸은 로컬이미지라 비워졌습니다');
-      setTimeout(() => alert('등록파일은 저장되었습니다.\n등록용 이미지 칸은 http(s) 절대경로가 필요합니다.\n현재 로컬 업로드 이미지는 data/blob 형식이라 이미지 URL 칸은 비워서 저장했습니다.\n실업로드 전에는 CDN·자사몰·이미지호스팅 URL로 바꿔 넣어주세요.'), 120);
-    }else if(detailWasTrimmed){
-      showToast('📊 등록파일 저장 완료 · 상세HTML 길이 자동조정');
-    }else if(usedBlobFallback){
-      showToast('📊 등록파일 저장 완료');
-    }else{
-      showToast('📊 등록파일 저장 완료');
+    // ① NAS 해당 품번 폴더에 엑셀 저장
+    const nasFolder = (document.getElementById('inp-item-code')?.value||'').trim() || getExportBaseFilename();
+    try {
+      await new Promise(function(resolve, reject){
+        const reader = new FileReader();
+        reader.onload = function(e){
+          const base64 = e.target.result.split(',')[1];
+          fetch(DETAIL_API_BASE + '/detail/save-master', {
+            method:'POST', headers:{'Content-Type':'application/json'},
+            body: JSON.stringify({ folder_name:nasFolder, sabang_excel_base64:base64, sabang_excel_filename:filename })
+          }).then(resolve).catch(reject);
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+      });
+      showToast('✅ NAS 저장 완료: ' + nasFolder + '/' + filename);
+    } catch(nasErr) {
+      console.warn('NAS 엑셀 저장 실패:', nasErr);
     }
+
+    // ② 브라우저 자동 다운로드
+    const dlUrl = URL.createObjectURL(blob);
+    const dlA = document.createElement('a');
+    dlA.href = dlUrl; dlA.download = filename;
+    document.body.appendChild(dlA); dlA.click();
+    document.body.removeChild(dlA); URL.revokeObjectURL(dlUrl);
+    showToast('📊 ' + filename + ' 다운로드 완료');
   }catch(err){
     console.error(err);
     alert('등록파일 생성 중 오류가 발생했습니다.\n' + (err.message || err));
@@ -8371,86 +8406,70 @@ async function saveDetailMasterToNas(){
 async function confirmAndUploadProduct(){
   if(!checkItemCode()) return;
   if(_itemCodeCheck && _itemCodeCheck.ok === false){
-    alert(`품번 중복으로 출력이 차단되었습니다.\n\n${_itemCodeCheck.lastMsg || ''}`);
-    return;
+    const go = confirm('품번 체크 문제\n(' + (_itemCodeCheck.lastMsg||'') + ')\n그래도 진행하시겠습니까?');
+    if(!go) return;
+    _itemCodeCheck = { ok:true, checkedCode:'', lastMsg:'' };
   }
   const btn = document.getElementById('btn-confirm-upload');
   const oldText = btn ? btn.textContent : '';
   try{
-    if(btn){ btn.disabled = true; btn.textContent = '확정 처리 중...'; }
-    saveImageBaseUrl(document.getElementById('img-base-url')?.value || '');
-    if(!getImageBaseUrl()) throw new Error('이미지 Public Base URL을 확인해주세요.');
-    if(!getSupabaseAnonKey()) throw new Error('Supabase anon key를 확인해주세요.');
+    if(btn){ btn.disabled=true; btn.textContent='JPG 생성 중...'; }
 
-    let builtReady = true;
-    try{ ensureBuiltAssetsReady(); }catch(e){ builtReady = false; }
-    if(!builtReady){
-      await buildJpgPreviewAssets();
-    }
+    // ① JPG 미리생성
+    await buildJpgPreviewAssets();
 
-    const built = ensureBuiltAssetsReady();
-    const ok = confirm(
-      `수정확정 후 NAS 저장 + Supabase 업로드를 진행합니다.\n\n대표: ${built.main.filename} (${bytesToSize(built.main.size)})\n상세: ${built.detail.filename} (${bytesToSize(built.detail.size)})\n\n계속 진행할까요?`
-    );
-    if(!ok) return;
-
+    // ② NAS 저장 (draft + master)
+    if(btn) btn.textContent='NAS 저장 중...';
     await saveDetailDraftToNas();
     await saveDetailMasterToNas();
 
-    const uploaded = await uploadCurrentProductImagesToSupabase();
-    await saveCurrentProductRecordToSupabase(uploaded);
-
     window.__productConfirmState = {
-      confirmed:true,
-      uploaded:true,
-      mainUrl: uploaded.mainUrl || '',
-      detailUrl: uploaded.detailUrl || '',
+      confirmed:true, uploaded:false,
+      mainUrl:'', detailUrl:'',
       confirmedAt: new Date().toISOString()
     };
-
-    try{
-      localStorage.setItem('harue_confirm_state', JSON.stringify(window.__productConfirmState));
-    }catch(e){}
-
+    try{ localStorage.setItem('harue_confirm_state', JSON.stringify(window.__productConfirmState)); }catch(e){}
     updateConfirmUi();
-    showToast('✅ 수정확정 완료 · NAS 저장 + Supabase 업로드 + products 저장 완료');
-    alert('수정확정 완료\n- NAS 저장 완료\n- Supabase 업로드 완료\n- products 저장 완료\n이제 사방넷 등록파일 생성이 가능합니다.');
+
+    // ③ 상품등록(사방넷) 탭으로 이동
+    switchTab('register');
+    showToast('✅ NAS 저장 완료 · 상품등록 탭에서 내용 확인 후 등록파일 생성하세요');
+    const noticeEl = document.getElementById('sabang-confirm-notice');
+    if(noticeEl) noticeEl.style.display='block';
 
   }catch(err){
     console.error(err);
-    alert('수정확정 처리 중 오류가 발생했습니다.\n' + (err.message || err));
+    alert('수정확정 오류: ' + (err.message||err));
   }finally{
-    if(btn){ btn.disabled = false; btn.textContent = oldText || '✅ 수정확정'; }
-    updateConfirmUi();
+    if(btn){ btn.disabled=false; btn.textContent=oldText||'✅ 수정확정'; }
   }
 }
 
 async function confirmUploadAndExportSabangExcel(){
   if(!checkItemCode()) return;
-  if(_itemCodeCheck && _itemCodeCheck.ok === false){
-    alert(`품번 중복으로 출력이 차단되었습니다.\n\n${_itemCodeCheck.lastMsg || ''}`);
-    return;
-  }
+  // 필수값 체크
+  const missing = [];
+  if(!cleanSabangText(document.getElementById('inp-name')?.value||'', 255)) missing.push('상품명');
+  if(!cleanSabangText(document.getElementById('inp-item-code')?.value||'', 60)) missing.push('품번');
+  if(toSabangMoneyValue(document.getElementById('sabang-cost')?.value||'0') <= 0) missing.push('원가');
+  if(toSabangMoneyValue(document.getElementById('sabang-price')?.value||'0') <= 0) missing.push('판매가');
+  if(missing.length){ alert('저장 전 필수값 확인\n\n누락: ' + missing.join(', ')); return; }
+
   const btn = document.getElementById('btn-upload-export');
   const oldText = btn ? btn.textContent : '';
   try {
-    if(btn){ btn.disabled = true; btn.textContent = '업로드 중...'; }
-    saveImageBaseUrl(document.getElementById('img-base-url')?.value || '');
-    if(!getImageBaseUrl()) throw new Error('이미지 Public Base URL을 확인해주세요.');
-    if(!getSupabaseAnonKey()) throw new Error('Supabase anon key를 입력해주세요.');
-    const built = ensureBuiltAssetsReady();
-    const ok = confirm(
-      `업로드 후 등록파일을 생성합니다.\n\n대표: ${built.main.filename} (${bytesToSize(built.main.size)})\n상세: ${built.detail.filename} (${bytesToSize(built.detail.size)})\n\n계속 진행할까요?`
-    );
-    if(!ok) return;
-    await uploadCurrentProductImagesToSupabase();
-    showToast('☁ 이미지 업로드 완료');
+    if(btn){ btn.disabled=true; btn.textContent='엑셀 생성 중...'; }
     await exportSabangnetExcel();
+    const noticeEl = document.getElementById('sabang-confirm-notice');
+    if(noticeEl) noticeEl.style.display='none';
+    window.__productConfirmState = Object.assign(window.__productConfirmState||{}, { uploaded:true });
+    try{ localStorage.setItem('harue_confirm_state', JSON.stringify(window.__productConfirmState)); }catch(e){}
+    updateConfirmUi();
   } catch(err) {
     console.error(err);
-    alert('업로드 + 등록파일 생성 중 오류가 발생했습니다.\n' + (err.message || err));
+    alert('등록파일 생성 오류: ' + (err.message||err));
   } finally {
-    if(btn){ btn.disabled = false; btn.textContent = oldText || '☁ 확인 후 업로드 + 등록파일 생성'; }
+    if(btn){ btn.disabled=false; btn.textContent=oldText||'☁ NAS 저장 + 등록파일 생성'; }
   }
 }
 
@@ -8638,6 +8657,388 @@ document.addEventListener('change', function(e){
   }
 })();
 // ─────────────────────────────────────────────────────────────────────────────
+
+// =============================================
+// NAS 폴더 불러오기 (upload/work → studio)
+// =============================================
+(function() {
+  var NAS = 'https://nas.haruepick.com';
+  window._nasCurrentSource = 'work';
+  window._nasCurrentData = null;
+
+  var activeStyle = 'flex:1;padding:6px 0;border:2px solid #2a6db5;background:#2a6db5;color:#fff;border-radius:6px;font-size:11px;font-weight:800;cursor:pointer;';
+  var inactiveStyle = 'flex:1;padding:6px 0;border:2px solid #ddd;background:#fff;color:#888;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer;';
+
+  window.nasLoadFolderList = function(source) {
+    source = source || window._nasCurrentSource || 'work';
+    window._nasCurrentSource = source;
+    var btnWork = document.getElementById('nas-btn-work');
+    var btnUpload = document.getElementById('nas-btn-upload');
+    if (btnWork) btnWork.style.cssText = source === 'work' ? activeStyle : inactiveStyle;
+    if (btnUpload) btnUpload.style.cssText = source === 'upload' ? activeStyle : inactiveStyle;
+    var sel = document.getElementById('nas-folder-select');
+    if (!sel) return;
+    sel.innerHTML = '<option value="">-- 불러오는 중... --</option>';
+    var endpoint = source === 'work' ? '/work-images' : '/list-inbox';
+    fetch(NAS + endpoint + '?t=' + Date.now(), { cache: 'no-store' })
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        var folders = data.folders || [];
+        sel.innerHTML = '<option value="">-- 폴더 선택 --</option>';
+        folders.forEach(function(f) {
+          var opt = document.createElement('option');
+          opt.value = f.name;
+          var info = [];
+          if (f.image_count !== undefined) info.push(f.image_count + '장');
+          if (f.status) info.push(f.status);
+          if (f.vendor_name) info.push(f.vendor_name);
+          opt.textContent = f.name + (info.length ? ' · ' + info.join(' · ') : '');
+          sel.appendChild(opt);
+        });
+        nasSetStatus(folders.length + '개 폴더 로드됨', '#2a6db5');
+      })
+      .catch(function(e) {
+        sel.innerHTML = '<option value="">-- NAS 연결 실패 --</option>';
+        nasSetStatus('NAS 연결 실패: ' + e.message, '#c00');
+      });
+  };
+
+  window.nasPreviewFolder = function(folderName) {
+    var info = document.getElementById('nas-folder-info');
+    var imgPreview = document.getElementById('nas-image-preview');
+    var imgGrid = document.getElementById('nas-image-grid');
+    window._nasCurrentData = null;
+    if (!folderName) {
+      if (info) info.style.display = 'none';
+      if (imgPreview) imgPreview.style.display = 'none';
+      return;
+    }
+    nasSetStatus('이미지 로딩 중...', '#2a6db5');
+    var endpoint = window._nasCurrentSource === 'work'
+      ? '/detail/work-images?folder_name=' + encodeURIComponent(folderName)
+      : '/upload/load-draft?folder_name=' + encodeURIComponent(folderName);
+    fetch(NAS + endpoint + '&t=' + Date.now(), { cache: 'no-store' })
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        if (!data.ok) throw new Error(data.error || '불러오기 실패');
+        window._nasCurrentData = { folderName: folderName, data: data };
+        var pm = data.product_meta || data.draft || {};
+        if (info) {
+          info.style.display = 'block';
+          var rows = [
+            ['업체', pm.vendor_name],
+            ['상품명', pm.wholesale_name || pm.product_name],
+            ['가격', pm.price ? pm.price + '원' : ''],
+            ['컬러', pm.colors],
+            ['사이즈', pm.sizes],
+            ['소재', pm.material],
+            ['원산지', pm.country_of_origin || pm.country],
+            ['이미지', (data.images || []).length + '장']
+          ].filter(function(r) { return r[1]; });
+          info.innerHTML = rows.map(function(r) { return '<b>' + r[0] + ':</b> ' + r[1]; }).join('<br>');
+        }
+        var images = data.images || [];
+        if (images.length > 0 && imgGrid) {
+          imgPreview.style.display = 'block';
+          imgGrid.innerHTML = '';
+          images.slice(0, 9).forEach(function(img, i) {
+            var src = img.dataUrl || '';
+            var label = img.name || img.save_name || ('img_' + (i+1));
+            var div = document.createElement('div');
+            div.style.cssText = 'position:relative;aspect-ratio:1/1;overflow:hidden;border-radius:4px;background:#f0f0f0;cursor:pointer;border:2px solid transparent;';
+            div.title = label;
+            div.innerHTML = '<img src="' + src + '" style="width:100%;height:100%;object-fit:cover;" />'
+              + '<div style="position:absolute;bottom:0;left:0;right:0;background:rgba(0,0,0,0.55);color:#fff;font-size:8px;padding:2px 3px;text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + label + '</div>';
+            div.onclick = function() {
+              nasSetHero(src);
+              document.querySelectorAll('#nas-image-grid > div').forEach(function(d) { d.style.borderColor = 'transparent'; });
+              div.style.borderColor = '#c8a96e';
+              try { showToast('대표이미지: ' + label); } catch(e) {}
+            };
+            imgGrid.appendChild(div);
+          });
+          if (images[0] && images[0].dataUrl) {
+            nasSetHero(images[0].dataUrl);
+            if (imgGrid.children[0]) imgGrid.children[0].style.borderColor = '#c8a96e';
+          }
+        } else {
+          if (imgPreview) imgPreview.style.display = 'none';
+        }
+        nasSetStatus(images.length + '장 로드됨. 아래 버튼으로 적용하세요.', '#2a7a2a');
+      })
+      .catch(function(e) {
+        if (info) info.style.display = 'none';
+        if (imgPreview) imgPreview.style.display = 'none';
+        nasSetStatus('불러오기 실패: ' + e.message, '#c00');
+      });
+  };
+
+  window.nasApplyFolder = function() {
+    var folderName = document.getElementById('nas-folder-select') ? document.getElementById('nas-folder-select').value : '';
+    if (!folderName) { alert('폴더를 선택해주세요.'); return; }
+    if (!window._nasCurrentData || window._nasCurrentData.folderName !== folderName) {
+      nasPreviewFolder(folderName);
+      setTimeout(function() { nasApplyFolder(); }, 2000);
+      return;
+    }
+    var d = window._nasCurrentData;
+    var pm = d.data.product_meta || d.data.draft || {};
+    var images = d.data.images || [];
+    try {
+      if (pm.wholesale_name || pm.product_name) {
+        var name = pm.wholesale_name || pm.product_name;
+        try { setInput('inp-name', name); } catch(e) {}
+        try { syncField('pd-product-name', name); } catch(e) {}
+      }
+      if (pm.price) {
+        var priceNum = parseInt(String(pm.price).replace(/[^0-9]/g, ''), 10);
+        if (!isNaN(priceNum)) {
+          try { setInput('sabang-cost', priceNum); setInput('sabang-price', priceNum); syncRegisterPricing(); } catch(e) {}
+        }
+      }
+      if (pm.country_of_origin || pm.country) {
+        var country = pm.country_of_origin || pm.country;
+        try { setInput('reg-origin', country); nasSetInfoRow('제조국', country); } catch(e) {}
+      }
+      if (pm.material) { try { nasSetInfoRow('소재', pm.material); } catch(e) {} }
+      if (pm.heel_height) { try { nasSetInfoRow('굽높이', pm.heel_height); } catch(e) {} }
+      if (pm.foot_width) { try { nasSetInfoRow('볼넓이', pm.foot_width); } catch(e) {} }
+      if (pm.colors) {
+        var colors = pm.colors.split(/[,\/，]/).map(function(c) { return c.trim(); }).filter(Boolean);
+        try {
+          var colorRows = document.getElementById('color-rows');
+          if (colorRows) colorRows.innerHTML = '';
+          colors.forEach(function(c) { try { addColor(c); } catch(e) {} });
+        } catch(e) {}
+      }
+      var txtContent = pm.raw_text || d.data.txt_content || '';
+      if (txtContent) {
+        try {
+          var fakeFile = new File([txtContent], 'product.txt', { type: 'text/plain' });
+          importTextInfo({ target: { files: [fakeFile], value: '' } });
+        } catch(e) {}
+      }
+      nasSetStatus('"' + folderName + '" 적용 완료! 이미지 ' + images.length + '장', '#2a7a2a');
+      try { showToast('NAS 폴더 적용 완료: ' + folderName); } catch(e) {}
+      setTimeout(function() { try { switchTab('content'); } catch(e) {} }, 500);
+    } catch(e) {
+      nasSetStatus('적용 실패: ' + e.message, '#c00');
+    }
+  };
+
+  function nasSetHero(src) {
+    if (!src) return;
+    try { state.heroSrc = src; state.heroX = 0; state.heroY = 0; state.heroScale = 1; state.heroRot = 0; applyHeroClipImg(); } catch(e) {}
+  }
+
+  function nasSetInfoRow(key, val) {
+    if (!val) return;
+    try {
+      var rows = state.infoRows || [];
+      var found = false;
+      rows.forEach(function(r) { if (r.key === key) { r.val = val; found = true; } });
+      if (!found) rows.push({ key: key, val: val });
+      if (typeof buildInfoSidebar === 'function') buildInfoSidebar();
+      if (typeof updateInfo === 'function') updateInfo();
+      if (typeof saveInfoRows === 'function') saveInfoRows();
+    } catch(e) {}
+  }
+
+  function nasSetStatus(msg, color) {
+    var el = document.getElementById('nas-load-status');
+    if (!el) return;
+    el.style.display = 'block';
+    el.style.color = color || '#2a6db5';
+    el.textContent = msg;
+  }
+})();
+
+// =============================================
+// NAS 불러오기 탭 (detail/work 폴더 목록)
+// =============================================
+var _nasModalSelected = null;
+var _nasModalSource = 'detail';
+
+function nasModalInit() { nasModalLoadDetailList(); }
+
+function nasModalLoadDetailList() {
+  _nasModalSource = 'detail';
+  var on = 'flex:1;padding:6px 0;border:2px solid #1a4a8a;background:#1a4a8a;color:#fff;border-radius:6px;font-size:11px;font-weight:800;cursor:pointer;';
+  var off = 'flex:1;padding:6px 0;border:2px solid #ddd;background:#fff;color:#888;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer;';
+  var btnD = document.getElementById('nas-btn-detail');
+  var btnW = document.getElementById('nas-btn-work2');
+  if(btnD) btnD.style.cssText = on; if(btnW) btnW.style.cssText = off;
+  nasModalFetchList('https://nas.haruepick.com/detail/list');
+}
+
+function nasModalLoadWorkList() {
+  _nasModalSource = 'work';
+  var on = 'flex:1;padding:6px 0;border:2px solid #1a4a8a;background:#1a4a8a;color:#fff;border-radius:6px;font-size:11px;font-weight:800;cursor:pointer;';
+  var off = 'flex:1;padding:6px 0;border:2px solid #ddd;background:#fff;color:#888;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer;';
+  var btnD = document.getElementById('nas-btn-detail');
+  var btnW = document.getElementById('nas-btn-work2');
+  if(btnD) btnD.style.cssText = off; if(btnW) btnW.style.cssText = on;
+  nasModalFetchList('https://nas.haruepick.com/work-images');
+}
+
+function nasModalFetchList(url) {
+  var listEl = document.getElementById('nas-modal-list');
+  var previewEl = document.getElementById('nas-modal-preview');
+  var applyBtn = document.getElementById('nas-modal-apply-btn');
+  if(listEl) listEl.innerHTML = '<div style="padding:16px;text-align:center;color:#888;font-size:12px;">불러오는 중...</div>';
+  if(previewEl) previewEl.style.display='none';
+  if(applyBtn) applyBtn.style.display='none';
+  _nasModalSelected = null;
+
+  fetch(url + '?t=' + Date.now(), {cache:'no-store'})
+    .then(function(r){ return r.json(); })
+    .then(function(data){
+      var items = data.items || data.folders || [];
+      if(!items.length){ listEl.innerHTML='<div style="padding:16px;text-align:center;color:#aaa;font-size:12px;">폴더 없음</div>'; return; }
+      listEl.innerHTML='';
+      items.forEach(function(item){
+        var name = item.folder_name || item.name;
+        var files = item.files || [];
+        var hasEdit = files.some(function(f){ return f.includes('_edit.html'); });
+        var hasExcel = files.some(function(f){ return f.includes('.xlsx'); });
+        var imgCnt = item.image_count || 0;
+        var row = document.createElement('div');
+        row.style.cssText = 'padding:10px 12px;border-bottom:1px solid #f0f0f0;cursor:pointer;background:#fff;';
+        row.onmouseenter=function(){ row.style.background='#f0f5ff'; };
+        row.onmouseleave=function(){ row.style.background=(_nasModalSelected===name)?'#e0ecff':'#fff'; };
+        var b='';
+        if(hasEdit) b+='<span style="font-size:9px;background:#e8eeff;color:#1a4a8a;padding:2px 5px;border-radius:10px;margin-left:4px;">편집가능</span>';
+        if(hasExcel) b+='<span style="font-size:9px;background:#e8f5e9;color:#2a7a2a;padding:2px 5px;border-radius:10px;margin-left:4px;">엑셀</span>';
+        if(imgCnt) b+='<span style="font-size:9px;background:#f5f5f5;color:#888;padding:2px 5px;border-radius:10px;margin-left:4px;">'+imgCnt+'장</span>';
+        row.innerHTML = '<div style="font-size:12px;font-weight:700;color:#1a1a1a;">'+name+b+'</div>'
+          +(item.vendor_name?'<div style="font-size:10px;color:#888;margin-top:2px;">'+(item.vendor_name||'')+(item.wholesale_name?' · '+item.wholesale_name:'')+'</div>':'')
+          +'<div style="font-size:10px;color:#aaa;">'+(item.updated_at||'')+'</div>';
+        row.onclick=function(){
+          document.querySelectorAll('#nas-modal-list > div').forEach(function(d){ d.style.background='#fff'; });
+          row.style.background='#e0ecff';
+          _nasModalSelected=name;
+          if(previewEl){ previewEl.style.display='block'; previewEl.innerHTML='<b>선택:</b> '+name+(files.length?'<br><b>파일:</b> '+files.join(', '):''); }
+          if(applyBtn) applyBtn.style.display='block';
+        };
+        listEl.appendChild(row);
+      });
+    })
+    .catch(function(e){ if(listEl) listEl.innerHTML='<div style="padding:16px;text-align:center;color:#c00;font-size:12px;">연결 실패: '+e.message+'</div>'; });
+}
+
+function nasModalApply() {
+  var folderName = _nasModalSelected;
+  if(!folderName){ alert('폴더를 선택해주세요.'); return; }
+  var statusEl = document.getElementById('nas-modal-status');
+  function setStatus(msg, ok){
+    if(!statusEl) return;
+    statusEl.style.display='block';
+    statusEl.style.background = ok?'#e8f5e9':'#fff3e0';
+    statusEl.style.color = ok?'#2a7a2a':'#c00';
+    statusEl.textContent = msg;
+  }
+  setStatus('불러오는 중...', true);
+
+  if(_nasModalSource === 'detail'){
+    // _edit.html 우선 → draft.json fallback
+    fetch('https://nas.haruepick.com/files/'+encodeURIComponent(folderName)+'/'+encodeURIComponent(folderName)+'_edit.html?t='+Date.now(), {cache:'no-store'})
+      .then(function(r){ if(!r.ok) throw new Error('없음'); return r.text(); })
+      .then(function(html){
+        var m = html.match(/<template id="studio-snapshot-data"[^>]*>([\s\S]*?)<\/template>/i);
+        if(!m) throw new Error('스냅샷 없음');
+        var snap = typeof decodeSnapshotFromHtml==='function' ? decodeSnapshotFromHtml(m[1].trim()) : JSON.parse(atob(m[1].trim()));
+        if(typeof applyStudioSnapshot==='function') applyStudioSnapshot(snap);
+        setStatus('✅ "'+folderName+'" 불러오기 완료!', true);
+        try{ showToast('☁ NAS 불러오기: '+folderName); }catch(e){}
+        setTimeout(function(){ try{ switchTab('content'); }catch(e){} }, 800);
+      })
+      .catch(function(){
+        fetch('https://nas.haruepick.com/detail/load-draft?folder_name='+encodeURIComponent(folderName)+'&t='+Date.now(), {cache:'no-store'})
+          .then(function(r){ return r.json(); })
+          .then(function(data){
+            if(!data.ok) throw new Error(data.error||'실패');
+            if(!data.draft||!Object.keys(data.draft).length) throw new Error('스냅샷 없음 - 수정확정 필요');
+            if(typeof applyStudioSnapshot==='function') applyStudioSnapshot(data.draft);
+            setStatus('✅ "'+folderName+'" 불러오기 완료!', true);
+            try{ showToast('☁ NAS 불러오기: '+folderName); }catch(e){}
+            setTimeout(function(){ try{ switchTab('content'); }catch(e){} }, 800);
+          })
+          .catch(function(e){ setStatus('❌ '+e.message, false); });
+      });
+  } else {
+    // work 폴더 - 이미지 + TXT + 상품정보 불러오기
+    fetch('https://nas.haruepick.com/detail/work-images?folder_name='+encodeURIComponent(folderName)+'&t='+Date.now(), {cache:'no-store'})
+      .then(function(r){ return r.json(); })
+      .then(function(data){
+        if(!data.ok) throw new Error(data.error||'실패');
+        var pm = data.product_meta || {};
+
+        // 상품명
+        if(pm.wholesale_name){ try{ setInput('inp-name', pm.wholesale_name); syncProductNames(); }catch(e){} }
+
+        // 가격
+        if(pm.price){
+          var pn = parseInt(String(pm.price).replace(/[^0-9]/g,''), 10);
+          if(!isNaN(pn)){ try{ setInput('sabang-cost', pn); setInput('sabang-price', pn); syncRegisterPricing(); }catch(e){} }
+        }
+
+        // 원산지
+        if(pm.country_of_origin||pm.country){ try{ setInput('reg-origin', pm.country_of_origin||pm.country); }catch(e){} }
+
+        // 소재/굽높이/발볼 → 상품정보표
+        function setInfoRow(key, val){
+          if(!val) return;
+          try{
+            var rows = state.infoRows||[];
+            var found=false;
+            rows.forEach(function(r){ if(r.key===key){ r.val=val; found=true; } });
+            if(!found) rows.push({key:key,val:val});
+            if(typeof buildInfoSidebar==='function') buildInfoSidebar();
+            if(typeof updateInfo==='function') updateInfo();
+            if(typeof saveInfoRows==='function') saveInfoRows();
+          }catch(e){}
+        }
+        if(pm.material) setInfoRow('소재', pm.material);
+        if(pm.heel_height) setInfoRow('굽높이', pm.heel_height);
+        if(pm.foot_width) setInfoRow('볼넓이', pm.foot_width);
+        if(pm.country_of_origin||pm.country) setInfoRow('제조국', pm.country_of_origin||pm.country);
+
+        // 색상옵션
+        if(pm.colors){
+          var colors = pm.colors.split(/[,\/]/).map(function(c){ return c.trim(); }).filter(Boolean);
+          try{
+            var cr = document.getElementById('color-rows');
+            if(cr) cr.innerHTML='';
+            colors.forEach(function(c){ try{ addColor(c); }catch(e){} });
+          }catch(e){}
+        }
+
+        // TXT 원문 파싱
+        var txt = pm.raw_text || data.txt_content || '';
+        if(txt){
+          try{
+            var fakeFile = new File([txt], 'product.txt', {type:'text/plain'});
+            importTextInfo({target:{files:[fakeFile],value:''}});
+          }catch(e){}
+        }
+
+        // 이미지 - 첫 번째를 대표이미지
+        var imgs = data.images || [];
+        if(imgs.length){
+          try{
+            state.heroSrc=imgs[0].dataUrl;
+            state.heroX=0; state.heroY=0; state.heroScale=1; state.heroRot=0;
+            applyHeroClipImg();
+          }catch(e){}
+        }
+
+        setStatus('✅ "'+folderName+'" 완료! (이미지 '+imgs.length+'장+상품정보 자동입력)', true);
+        try{ showToast('☁ NAS work 불러오기 완료: '+folderName); }catch(e){}
+        setTimeout(function(){ try{ switchTab('content'); }catch(e){} }, 800);
+      })
+      .catch(function(e){ setStatus('❌ '+e.message, false); });
+  }
+}
 
 </script>
 </body>
