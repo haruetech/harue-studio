@@ -2976,39 +2976,102 @@ async function pickAvailableStyleName(stylePool){
   return '';
 }
 
-function detectGenItemFromText(raw){
-  const compact = String(raw || '').toLowerCase().replace(/\s+/g,'');
-  if(!compact) return '';
-  const has = (...words) => words.some(word => compact.includes(String(word).toLowerCase().replace(/\s+/g,'')));
+function normalizeShoeText(raw){
+  return String(raw || '').toLowerCase().replace(/[()\[\]{}]/g,' ').replace(/\s+/g,' ').trim();
+}
 
-  if((has('슬링백','slingback') && has('펌프스','pump','pumps')) || has('슬링백펌프스','slingbackpumps')) return 'PU';
-  if(has('펌프스','pump','pumps')) return 'PU';
-  if(has('슬링백','slingback')) return 'SB';
-  if(has('메리제인','maryjane','mary-jane')) return 'LF';
-  if(has('로퍼','loafer')) return 'LF';
-  if(has('플랫','flat')) return 'FL';
-  if(has('샌들','sandal')) return 'SD';
-  if(has('슬리퍼','slipper')) return 'SP';
-  if(has('뮬','mule')) return 'MU';
-  if(has('블로퍼','bloafer')) return 'BF';
-  if(has('워커','walker')) return 'WK';
-  if(has('부츠','부티','앵클','boot','boots')) return 'BT';
-  if(has('스니커즈','운동화','sneaker','sneakers')) return 'SN';
-  if(has('슬립온','slipon','slip-on')) return 'SO';
-  if(has('웨지','wedge')) return 'WH';
-  if(has('힐','heel','heels')) return 'HE';
-  if(has('구두')) return 'GD';
+function compactShoeText(raw){
+  return normalizeShoeText(raw).replace(/\s+/g,'');
+}
+
+function parseHeelCmFromText(raw){
+  const txt = String(raw || '');
+  const m = txt.match(/(\d+(?:\.\d+)?)\s*(?:cm|센치|센티)/i);
+  if(!m) return null;
+  const n = parseFloat(m[1]);
+  return Number.isFinite(n) ? n : null;
+}
+
+function extractShoeAttributes(raw){
+  const txt = normalizeShoeText(raw);
+  const compact = compactShoeText(raw);
+  const has = (...words) => words.some(word => compact.includes(String(word).toLowerCase().replace(/\s+/g,'')));
+  const heelCm = parseHeelCmFromText(raw);
+
+  const attr = {
+    hasPointed: has('포인티드','포인티드토','pointed','point toe','pointedtoe'),
+    hasSquare: has('스퀘어','스퀘어토','squaretoe','square toe'),
+    hasRound: has('라운드','라운드토','roundtoe','round toe'),
+    hasMaryjane: has('메리제인','maryjane','mary-jane','mary jane'),
+    hasSlingback: has('슬링백','slingback','sling back'),
+    hasLoafer: has('로퍼','loafer'),
+    hasFlatWord: has('플랫','flat'),
+    hasPump: has('펌프스','pump','pumps'),
+    hasHeelWord: has('힐','heel','heels','키튼힐','미들힐','미드힐','로우힐','하이힐','스틸레토'),
+    hasSandal: has('샌들','sandal'),
+    hasMule: has('뮬','mule'),
+    hasSlipper: has('슬리퍼','slipper'),
+    hasBloafer: has('블로퍼','bloafer'),
+    hasBoot: has('부츠','부티','앵클','boot','boots'),
+    hasSneaker: has('스니커즈','운동화','sneaker','sneakers'),
+    hasSlipon: has('슬립온','slipon','slip-on'),
+    hasWedge: has('웨지','wedge'),
+    hasOpenToe: has('오픈토','open toe','opentoe'),
+    hasStrap: has('스트랩','strap'),
+    hasBuckle: has('버클','buckle'),
+    hasBelt: has('벨트','belt'),
+    heelCm,
+    compact,
+    txt
+  };
+  attr.hasVisibleHeel = attr.hasHeelWord || attr.hasPump || (heelCm != null && heelCm >= 2.5) || has('굽있','굽있는','미들굽','낮은굽','키튼');
+  attr.isLowFlat = attr.hasFlatWord || (heelCm != null && heelCm <= 2.2) || has('굽없','굽없는','낮은굽','로우플랫');
+  return attr;
+}
+
+function detectGenItemFromText(raw){
+  const a = extractShoeAttributes(raw);
+  const has = (...words) => words.some(word => a.compact.includes(String(word).toLowerCase().replace(/\s+/g,'')));
+
+  // 우선순위: 구조가 명확한 타입부터 판정
+  if(a.hasBoot) return 'BT';
+  if(a.hasSneaker) return 'SN';
+  if(a.hasSlipon) return 'SO';
+  if(a.hasWedge) return 'WH';
+  if(a.hasSandal || a.hasOpenToe) return 'SD';
+  if(a.hasSlipper) return 'SP';
+  if(a.hasMule) return 'MU';
+  if(a.hasBloafer) return 'BF';
+  if(a.hasLoafer) return 'LF';
+
+  // 슬링백은 뒤축 오픈 구조가 핵심. 단, 슬링백 펌프스 문구면 SB로 분리 유지
+  if(a.hasSlingback) return 'SB';
+
+  // 포인티드토 + 굽/펌프스 느낌이면 플랫보다 펌프스 우선
+  if(a.hasPump || (a.hasPointed && a.hasVisibleHeel) || has('스틸레토','키튼힐','미들힐','미드힐','하이힐')) return 'PU';
+
+  // 메리제인은 굽이 낮으면 플랫, 굽/펌프스면 PU
+  if(a.hasMaryjane){
+    if(a.hasVisibleHeel && !a.isLowFlat) return 'PU';
+    return 'FL';
+  }
+
+  if(a.hasHeelWord && !a.isLowFlat) return 'HE';
+  if(a.hasFlatWord || a.isLowFlat) return 'FL';
+  if(has('구두')) return a.hasVisibleHeel ? 'PU' : 'GD';
   return '';
 }
 
 function applyDetectedGenItemFromInputs(){
   const genItemEl = document.getElementById('gen-item');
   if(!genItemEl) return '';
+  // 기존 상품명이 잘못 들어가 있으면 오판하므로 상품키워드/도매명/상품정보를 우선 사용
   const texts = [
     document.getElementById('inp-product-keyword')?.value || '',
-    document.getElementById('inp-name')?.value || '',
-    inferCategoryLabel(),
-    getInfoValueByKey('모델명') || ''
+    document.getElementById('reg-wholesale-name')?.value || '',
+    getInfoValueByKey('모델명') || '',
+    getInfoValueByKey('굽높이') || '',
+    inferCategoryLabel()
   ].join(' ');
   const detected = detectGenItemFromText(texts);
   if(detected && genItemEl.value !== detected){
@@ -3019,9 +3082,135 @@ function applyDetectedGenItemFromInputs(){
   return detected || String(genItemEl.value || '').toUpperCase();
 }
 
+function isGeneratedKeywordLike(value){
+  const v = String(value || '').trim();
+  if(!v) return true;
+  const compact = v.replace(/\s+/g,'');
+  return /^(컴포트|소프트|밸런스|엘레강스|베이직|데일리)?(슈즈|여성화|구두|펌프스|슬링백|플랫슈즈|플랫|로퍼|샌들|슬리퍼|뮬|블로퍼|스니커즈|워커|부츠)$/.test(compact);
+}
+
+function pickFeatureWords(raw){
+  const txt = normalizeShoeText(raw);
+  const compact = txt.replace(/\s+/g,'');
+  const has = (...keys) => keys.some(k => compact.includes(String(k).toLowerCase().replace(/\s+/g,'')) || txt.includes(String(k).toLowerCase()));
+  const out = [];
+  const add = (label) => { if(label && !out.includes(label)) out.push(label); };
+
+  if(has('메리제인','maryjane','mary jane','mary-jane')) add('메리제인');
+  if(has('슬링백','slingback','sling back')) add('슬링백');
+  if(has('포인티드토','포인티드','pointed','pointed toe')) add('포인티드토');
+  else if(has('스퀘어토','스퀘어','square toe')) add('스퀘어토');
+  else if(has('라운드토','라운드','round toe')) add('라운드토');
+
+  // 굽 표현은 카테고리 앞에 들어가야 상품명이 명확함
+  const heelCm = parseHeelCmFromText(raw);
+  if(has('키튼힐','kitten')) add('키튼힐');
+  else if(has('미들힐','미드힐','middle heel','mid heel')) add('미들힐');
+  else if(has('로우힐','low heel')) add('로우힐');
+  else if(has('하이힐','high heel','스틸레토')) add('하이힐');
+  else if(heelCm != null){
+    if(heelCm >= 5.5) add('하이힐');
+    else if(heelCm >= 3) add('미들힐');
+    else if(heelCm >= 2.2) add('로우힐');
+  }
+
+  if(has('메쉬','매쉬','망사','mesh')) add('메쉬');
+  const belt = has('벨트','belt');
+  const buckle = has('버클','buckle');
+  if(belt && buckle) add('벨트버클');
+  else if(buckle) add('버클');
+  else if(belt) add('벨트');
+  if(has('스트랩','strap')) add('스트랩');
+  if(has('리본','ribbon','bow')) add('리본');
+  if(has('체인','chain')) add('체인');
+  if(has('스톤','큐빅','비즈','stud','스터드','찡')) add('스톤');
+  if(has('플랫폼','platform','통굽')) add('플랫폼');
+  if(has('밴딩','elastic','스판')) add('밴딩');
+  if(has('펀칭','punching')) add('펀칭');
+  if(has('니트','knit')) add('니트');
+  return out;
+}
+
+function getCategoryFromCode(code, rawText){
+  const c = String(code || '').toUpperCase();
+  const a = extractShoeAttributes(rawText || '');
+  if(c === 'PU') return '펌프스';
+  if(c === 'HE') return '힐';
+  if(c === 'FL') return a.hasMaryjane ? '메리제인 플랫슈즈' : '플랫슈즈';
+  const map = { LF:'로퍼', SB:'슬링백', SD:'샌들', SP:'슬리퍼', MU:'뮬', BF:'블로퍼', WK:'워커', BT:'부츠', SN:'스니커즈', SO:'슬립온', WH:'웨지힐', GD:'구두' };
+  return map[c] || '';
+}
+
+function normalizeProductKeyword(value){
+  let v = String(value || '').trim().replace(/\s+/g,' ');
+  v = v.replace(/^(상품명|제품명)[:：]\s*/,'');
+  v = v.replace(/\b(MINIMUM|HARUE|TRENDON|REFLEX)\b/gi,'').replace(/미니멈|하루애|트렌드온/g,'');
+  v = v.replace(/\b(women|woman|female|shoes?)\b/gi,'').replace(/여성화|여성용|슈즈만|신발/g,'');
+  // 스타일명은 상품키워드/상품명에서 제거
+  const style = String(document.getElementById('inp-model-en')?.value || '').trim();
+  if(style) v = v.replace(new RegExp(style.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'g'),'');
+  return v.replace(/\s+/g,' ').trim();
+}
+
+function buildSmartProductKeywordFromInputs(aiKeyword){
+  const genItemEl = document.getElementById('gen-item');
+  const baseTexts = [
+    aiKeyword || '',
+    document.getElementById('reg-wholesale-name')?.value || '',
+    getInfoValueByKey('모델명') || '',
+    getInfoValueByKey('굽높이') || ''
+  ].join(' ');
+
+  let itemCode = detectGenItemFromText(baseTexts) || String(genItemEl?.value || '').toUpperCase();
+  if(genItemEl && itemCode && genItemEl.value !== itemCode){
+    genItemEl.value = itemCode;
+    updateGenPreview();
+    if(typeof syncRegisterAutoFields === 'function') syncRegisterAutoFields();
+  }
+
+  const category = getCategoryFromCode(itemCode, baseTexts) || inferCategoryLabel();
+  const features = pickFeatureWords(baseTexts);
+  const parts = [];
+  const add = (v) => { if(v && !parts.includes(v)) parts.push(v); };
+
+  // 판매형 상품명 순서: 앞코/구조 → 굽 → 장식/소재 → 정확한 아이템명
+  ['메리제인','슬링백','포인티드토','스퀘어토','라운드토','키튼힐','로우힐','미들힐','하이힐','메쉬','벨트버클','버클','벨트','스트랩','리본','체인','스톤','플랫폼','밴딩','펀칭','니트'].forEach(f => {
+    if(features.includes(f)) add(f);
+  });
+
+  // 과도하게 긴 상품명 방지: 핵심 4개 + 카테고리
+  const limited = parts.slice(0, 4);
+  if(category && !limited.join(' ').includes(category)) limited.push(category);
+
+  const made = normalizeProductKeyword(limited.join(' '));
+  const cleanedAi = normalizeProductKeyword(aiKeyword || '');
+
+  // AI가 이미 구체적인 키워드를 주면 유지하되, 너무 범용적인 경우만 재조합 사용
+  if(cleanedAi && !isGeneratedKeywordLike(cleanedAi) && detectGenItemFromText(cleanedAi)){
+    return cleanedAi;
+  }
+  if(made && made.length >= 4) return made;
+  if(cleanedAi) return cleanedAi;
+  return inferProductKeyword();
+}
+
+function cleanAiCommentText(value){
+  let txt = String(value || '').trim();
+  if(!txt) return '';
+  const material = String(getInfoValueByKey('소재') || '').trim();
+  if(material){
+    const escaped = material.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    txt = txt.replace(new RegExp('^\\s*' + escaped + '\\s*(특유의|소재의)?\\s*','i'), '');
+  }
+  txt = txt.replace(/^\s*(합성피혁|천연가죽|소가죽|양가죽|스웨이드|메쉬|매쉬|망사|패브릭|니트|PU|PVC)\s*(특유의|소재의)?\s*/i, '');
+  return txt.replace(/\n{3,}/g,'\n\n').trim();
+}
+
 function inferProductKeyword(){
   const current = String(document.getElementById('inp-product-keyword')?.value || '').trim();
-  if(current) return current;
+  if(current && !isGeneratedKeywordLike(current)) return normalizeProductKeyword(current);
+  const smart = buildSmartProductKeywordFromInputs(current);
+  if(smart) return smart;
   const heelRaw = getInfoValueByKey('굽높이');
   const category = inferCategoryLabel();
   const descriptor = inferHeelDescriptor(heelRaw);
@@ -3029,10 +3218,10 @@ function inferProductKeyword(){
 }
 
 function buildComposedProductName(styleName, keyword){
-  const style = String(styleName || '').trim();
+  // 상품명에는 스타일명을 합치지 않음. 스타일명은 별도 필드/타이틀 상단에만 사용.
   const key = String(keyword || '').trim();
-  if(style && key) return `${style} ${key}`.replace(/\s+/g,' ').trim();
-  return style || key || '';
+  const style = String(styleName || '').trim();
+  return key || style || '';
 }
 
 function markProductNameManual(){
@@ -3172,22 +3361,24 @@ async function generateStructuredProductText(){
     const picked = await pickAvailableStyleName(stylePool);
     styleInp.value = picked || stylePool[Math.floor(Math.random() * stylePool.length)];
   }
-  if(keywordInp && !String(keywordInp.value || '').trim()){
-    keywordInp.value = inferProductKeyword();
+  // 아이템 먼저 판정 → 상품키워드 자동작성 정확도 보정
+  applyDetectedGenItemFromInputs();
+
+  if(keywordInp){
+    keywordInp.value = buildSmartProductKeywordFromInputs(keywordInp.value);
   }
 
   syncGeneratedProductName(true);
 
   const keyword = String(keywordInp?.value || '').trim();
   const category = inferCategoryLabel();
-  const material = getInfoValueByKey('소재');
   const heelRaw = getInfoValueByKey('굽높이');
   const heelCm = parseCmNumber(heelRaw);
   const colorNames = (state.colors || []).map(c => String(c.krName || c.name || '').trim()).filter(Boolean);
   const colorText = getColorCommentText(colorNames);
   const categoryTpl = getCategoryCommentTemplate(category);
-  const materialText = material ? `${material} 특유의 깔끔한 무드를 더해 ` : '';
-  const firstLine = `${materialText}${categoryTpl.silhouette} ${colorText} ${categoryTpl.use}`.replace(/\s+/g,' ').trim();
+  // COMMENT 첫 줄에는 소재명을 넣지 않음. 소재는 PRODUCT INFO에서만 노출합니다.
+  const firstLine = `${categoryTpl.silhouette} ${colorText} ${categoryTpl.use}`.replace(/\s+/g,' ').trim();
   let secondLine = '';
   if(heelCm != null && heelCm > 2){
     secondLine = getHeelCommentText(heelCm, category);
@@ -4320,22 +4511,33 @@ async function autoFillFromImage(dataUrl){
 [1단계] 아래 이름 목록 중 이 신발의 분위기·스타일·실루엣에 가장 잘 어울리는 이름 1개 선택:
 제니, 애린, 아가사, 에일린, 앨리스, 아만다, 앰버, 에이미, 앤젤라, 오드리, 오로라, 에바, 아리아, 벨라, 베쓰, 베키, 베시, 비앙카, 블리스, 브론디, 보니타, 버니, 칼라아, 카밀라, 카르멘, 캐서린, 셀리나, 첼시, 크리시, 신디, 클라라, 클레오, 코델리, 데이지, 다나, 달린, 도린, 도리스, 도로시, 에디스, 엘린, 에밀리, 엠마, 에리카, 에스더, 플로리, 프란시, 글로리, 그레이, 헤나, 헬렌, 헬리아, 헤라, 힐다, 일리아, 이리나, 아이린, 이자벨, 이시스, 제이드, 제인, 자스민, 제니퍼, 제이미, 제시카, 제시, 조안, 졸리, 조이, 줄리아, 줄리엣, 케이트, 칼리, 카라, 카일리, 켈리, 케리, 키라, 랄라, 라미스, 레이시, 로라, 라비나, 릴리, 리나, 린다, 린지, 리사, 로티, 루시, 루나, 마샤, 메리, 마틸다, 맨디, 메이, 미아, 미란다, 모니카, 미쉘, 매기, 마농, 마야, 마벨, 모네, 날로, 나미, 나나, 나니
 
-[2단계] 이미지에서 신발의 특성을 파악해서 상품명을 만들어줘:
-- 이름은 절대 포함하지 말 것
-- 신발 종류(펌프스, 부츠, 뮬, 플랫, 로퍼, 샌들, 스니커즈 등)
-- 굽 특성(플랫, 키튼힐, 로우힐, 미드힐, 하이힐, 웨지 등) — 굽이 낮거나 없으면 무조건 플랫으로 표현
-- 디자인 특성(스퀘어토, 라운드토, 포인티드토, 앵클, 첼시, 슬링백 등)
-- 예시: "스퀘어토 로우힐 펌프스", "앵클 첼시부츠", "키튼힐 슬링백"
+[2단계] 이미지에서 신발의 특성을 먼저 판정한 뒤 상품키워드를 만들어줘:
+- 스타일명/이름은 절대 포함하지 말 것
+- 브랜드명, 품번, 사람 이름 제외
+- 핵심 구조: 앞코/구조/굽/소재·장식 중 2~4개 + 정확한 신발 아이템명
+- 앞코: 포인티드토 / 스퀘어토 / 라운드토 중 보이는 것만
+- 굽: 굽이 3cm 이상으로 보이면 미들힐/키튼힐/하이힐 표현을 반드시 반영
+- 아이템 판정 규칙:
+  · 앞코가 뾰족하고 굽이 있으면 플랫슈즈가 아니라 펌프스 또는 힐
+  · 발등이 막힌 여성 구두형 + 굽 있음 = 펌프스 우선
+  · 뒤축이 열린 구조 = 슬링백
+  · 메리제인 스트랩 + 굽 거의 없음 = 메리제인 플랫슈즈
+  · 로퍼 갑피/페니/태슬 구조 = 로퍼
+- 너무 단순한 "플랫슈즈", "구두", "여성화" 단독 금지
+- 좋은 예시: "포인티드토 미들힐 펌프스", "벨트버클 메리제인 플랫슈즈", "스퀘어토 로우힐 펌프스", "스트랩 슬링백 펌프스"
 
-[3단계] 감성 코멘트 2줄 (한국어, 줄바꿈 \\n)
+[3단계] 감성 코멘트 2줄 (한국어, 줄바꿈 \n)
+- 첫 줄에 소재명으로 시작하지 말 것
+- 소재 설명보다 실루엣/착화/코디 중심으로 작성
 
 [4단계] 아이템 코드 선택 (FL=플랫, LF=로퍼, PU=펌프스, HE=힐, SB=슬링백, SD=샌들, SP=슬리퍼, MU=뮬, BF=블로퍼, WK=워커, BT=부츠, SN=스니커즈, WH=웨지힐)
 
 {
-  "model_en": "선택한 이름 (한글)",
-  "name_kr": "신발 특성 기반 상품명 (이름 제외)",
+  "model_en": "선택한 스타일명 (한글 이름 1개)",
+  "product_keyword": "앞코/구조/굽/소재·장식 + 정확한 아이템명",
+  "name_kr": "product_keyword와 동일하게, 이름 제외",
   "comment": "감성 코멘트 2줄",
-  "item_code": "아이템 코드 (예: PU)"
+  "item_code": "아이템 코드 (FL/LF/PU/HE/SB/SD/SP/MU/BF/WK/BT/SN/WH 중 1개)"
 }`
             }
           ]
@@ -4348,33 +4550,42 @@ async function autoFillFromImage(dataUrl){
     const clean = text.replace(/```json|```/g, '').trim();
     const result = JSON.parse(clean);
 
-    // 스타일명(영어상품명) 입력
+    // 스타일명 입력: 상품명과 분리
     if(result.model_en){
       const enInp = document.getElementById('inp-model-en');
-      if(enInp){ enInp.value = result.model_en; }
+      if(enInp){ enInp.value = String(result.model_en || '').trim(); }
     }
-    // 상품명 입력 (스타일명과 분리)
-    if(result.name_kr){
-      const nameInp = document.getElementById('inp-name');
-      if(nameInp){ nameInp.value = result.name_kr; }
-      syncModelNameFromProduct(result.name_kr);
-    }
-    syncProductNames();
 
-    // 아이템 자동 설정 (gen-item 선택)
+    // 아이템 자동 설정을 먼저 해야 품번 자동생성의 아이템 코드가 맞음
     if(result.item_code){
       const genItem = document.getElementById('gen-item');
       if(genItem){
+        const code = String(result.item_code || '').trim().toUpperCase();
         const opts = Array.from(genItem.options);
-        const match = opts.find(o => o.value === result.item_code);
-        if(match){ genItem.value = result.item_code; updateGenPreview(); }
+        const match = opts.find(o => o.value === code);
+        if(match){ genItem.value = code; updateGenPreview(); }
       }
     }
 
-    // 코멘트 입력
+    // 상품키워드 → 상품명 순서로 입력. 스타일명은 상품명에 합치지 않음.
+    const aiKeyword = result.product_keyword || result.name_kr || '';
+    const finalKeyword = buildSmartProductKeywordFromInputs(aiKeyword);
+    const keywordInp = document.getElementById('inp-product-keyword');
+    if(keywordInp){ keywordInp.value = finalKeyword; }
+
+    const nameInp = document.getElementById('inp-name');
+    if(nameInp){
+      nameInp.value = finalKeyword;
+      delete nameInp.dataset.manualEdit;
+      syncModelNameFromProduct(finalKeyword);
+    }
+    syncProductNames();
+
+    // 코멘트 입력: 소재 시작 문구 제거
     if(result.comment){
       const commentInp = document.getElementById('inp-comment');
-      if(commentInp){ commentInp.value = result.comment; syncComment(result.comment); autoResize(commentInp); }
+      const cleanComment = cleanAiCommentText(result.comment);
+      if(commentInp){ commentInp.value = cleanComment; syncComment(cleanComment); autoResize(commentInp); }
     }
 
     loadingEl.innerHTML = '✓ AI 자동 입력 완료!';
@@ -8446,6 +8657,7 @@ async function confirmAndUploadProduct(){
 
 async function confirmUploadAndExportSabangExcel(){
   if(!checkItemCode()) return;
+
   // 필수값 체크
   const missing = [];
   if(!cleanSabangText(document.getElementById('inp-name')?.value||'', 255)) missing.push('상품명');
@@ -8456,17 +8668,53 @@ async function confirmUploadAndExportSabangExcel(){
 
   const btn = document.getElementById('btn-upload-export');
   const oldText = btn ? btn.textContent : '';
+
   try {
-    if(btn){ btn.disabled=true; btn.textContent='엑셀 생성 중...'; }
-    await exportSabangnetExcel();
-    const noticeEl = document.getElementById('sabang-confirm-notice');
-    if(noticeEl) noticeEl.style.display='none';
-    window.__productConfirmState = Object.assign(window.__productConfirmState||{}, { uploaded:true });
+    // ① JPG 미리생성 (없으면 skip)
+    if(btn){ btn.disabled=true; btn.textContent='JPG 생성 중...'; }
+    try{ await buildJpgPreviewAssets(); }catch(e){ console.warn('[JPG 생성 skip]', e); }
+
+    // ② NAS draft 저장
+    if(btn) btn.textContent='NAS draft 저장 중...';
+    await saveDetailDraftToNas();
+
+    // ③ NAS master 저장 (detail.html + JPG)
+    if(btn) btn.textContent='NAS master 저장 중...';
+    try{ await saveDetailMasterToNas(); }catch(e){ console.warn('[master 저장 skip]', e); }
+
+    // ④ 작업 HTML 저장 (_edit.html)
+    if(btn) btn.textContent='NAS HTML 저장 중...';
+    try{
+      let html = '<!DOCTYPE html>\n' + document.documentElement.outerHTML;
+      html = html.replace(/\s*<template id="studio-snapshot-data"[^>]*>[\s\S]*?<\/template>\s*/gi, '\n');
+      const encoded = encodeSnapshotForHtml(collectStudioSnapshot());
+      const embedded = '\n<template id="studio-snapshot-data">' + encoded + '</template>\n';
+      const fix = '\n<style id="saved-width-fix">\n#product-page{width:1000px!important;}\n</style>\n';
+      html = html.includes('</body>') ? html.replace('</body>', fix + embedded + '</body>') : html + fix + embedded;
+      await saveEditHtmlToNas(html);
+    }catch(e){ console.warn('[edit HTML 저장 skip]', e); }
+
+    // __productConfirmState 확정 처리 (exportSabangnetExcel 내부 guard 통과용)
+    window.__productConfirmState = Object.assign(window.__productConfirmState||{}, {
+      confirmed: true, uploaded: false, confirmedAt: new Date().toISOString()
+    });
     try{ localStorage.setItem('harue_confirm_state', JSON.stringify(window.__productConfirmState)); }catch(e){}
     updateConfirmUi();
+
+    // ⑤ 사방넷 엑셀 생성 + 로컬 다운로드 + NAS 엑셀 저장
+    if(btn) btn.textContent='엑셀 생성 중...';
+    await exportSabangnetExcel();
+
+    const noticeEl = document.getElementById('sabang-confirm-notice');
+    if(noticeEl) noticeEl.style.display='none';
+    window.__productConfirmState = Object.assign(window.__productConfirmState||{}, { uploaded: true });
+    try{ localStorage.setItem('harue_confirm_state', JSON.stringify(window.__productConfirmState)); }catch(e){}
+    updateConfirmUi();
+    showToast('✅ NAS 저장 + 등록파일 생성 완료!');
+
   } catch(err) {
     console.error(err);
-    alert('등록파일 생성 오류: ' + (err.message||err));
+    alert('NAS 저장 / 등록파일 생성 오류:\n' + (err.message||err));
   } finally {
     if(btn){ btn.disabled=false; btn.textContent=oldText||'☁ NAS 저장 + 등록파일 생성'; }
   }
