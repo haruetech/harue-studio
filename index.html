@@ -4295,6 +4295,10 @@ function drawTransformedImageContainTop(ctx, img, outW, outH, panX, panY, scale,
   const y = (panY || 0);
 
   ctx.save();
+  // 캔버스 영역 밖으로 나가지 않도록 클리핑
+  ctx.beginPath();
+  ctx.rect(0, 0, outW, outH);
+  ctx.clip();
   ctx.translate(x + drawW / 2, y + drawH / 2);
   ctx.rotate(((rotDeg || 0) * Math.PI) / 180);
   ctx.drawImage(img, -drawW / 2, -drawH / 2, drawW, drawH);
